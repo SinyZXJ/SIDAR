@@ -625,6 +625,7 @@ private struct SceneUploadSettings: Equatable {
 
 private struct SceneUploadSettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @Binding var settings: SceneUploadSettings
     @State private var serverURL: String
     @State private var token: String
@@ -660,7 +661,20 @@ private struct SceneUploadSettingsView: View {
                         .textSelection(.enabled)
                 }
 
-                Section("Connection Test") {
+                Section {
+                    if let healthURL {
+                        Text("Health URL: \(healthURL.absoluteString)")
+                            .font(SidarFont.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+
+                        Button {
+                            openURL(healthURL)
+                        } label: {
+                            Label("Open Health in Safari", systemImage: "safari")
+                        }
+                    }
+
                     Button {
                         testConnection()
                     } label: {
@@ -680,6 +694,10 @@ private struct SceneUploadSettingsView: View {
                             .foregroundStyle(testStatus.hasPrefix("Connected") ? .green : .orange)
                             .textSelection(.enabled)
                     }
+                } header: {
+                    Text("Connection Test")
+                } footer: {
+                    Text("If Safari opens this exact URL but Test Receiver still fails, enable Local Network permission for SIDAR in iOS Settings, then reopen the app.")
                 }
 
                 if previewSettings.normalizedBaseURL == nil && !serverURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -713,6 +731,10 @@ private struct SceneUploadSettingsView: View {
 
     private var previewSettings: SceneUploadSettings {
         SceneUploadSettings(serverURL: serverURL, token: token)
+    }
+
+    private var healthURL: URL? {
+        previewSettings.normalizedBaseURL?.appendingPathComponent("health")
     }
 
     private func testConnection() {
@@ -963,7 +985,7 @@ private struct SceneUploader {
         var request = URLRequest(url: baseURL.appendingPathComponent("health"))
         request.httpMethod = "GET"
         request.timeoutInterval = 30
-        let (data, response) = try await URLSession(configuration: shortRequestConfiguration).data(for: request)
+        let (data, response) = try await shortRequestData(for: request, retryWithSharedSession: true)
         let health = try decodeUploadResponse(data: data, response: response, as: SceneUploadHealthResponse.self)
         guard health.status == "ok" else {
             throw SceneUploadError.server("Receiver health check failed.")
@@ -975,7 +997,7 @@ private struct SceneUploader {
         request.httpMethod = "GET"
         request.timeoutInterval = 30
         applyToken(to: &request)
-        let (data, response) = try await URLSession(configuration: shortRequestConfiguration).data(for: request)
+        let (data, response) = try await shortRequestData(for: request, retryWithSharedSession: true)
         let auth = try decodeUploadResponse(data: data, response: response, as: SceneUploadHealthResponse.self)
         guard auth.status == "ok" else {
             throw SceneUploadError.server("Receiver token check failed.")
@@ -989,7 +1011,7 @@ private struct SceneUploader {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         applyToken(to: &request)
         request.httpBody = try JSONEncoder().encode(body)
-        let (data, response) = try await URLSession(configuration: shortRequestConfiguration).data(for: request)
+        let (data, response) = try await shortRequestData(for: request, retryWithSharedSession: false)
         return try decodeUploadResponse(data: data, response: response, as: U.self)
     }
 
@@ -1001,6 +1023,27 @@ private struct SceneUploader {
         let token = settings.token.trimmingCharacters(in: .whitespacesAndNewlines)
         if !token.isEmpty {
             request.setValue(token, forHTTPHeaderField: "X-SIDAR-Token")
+        }
+    }
+
+    private func shortRequestData(
+        for request: URLRequest,
+        retryWithSharedSession: Bool
+    ) async throws -> (Data, URLResponse) {
+        let session = URLSession(configuration: shortRequestConfiguration)
+        defer { session.finishTasksAndInvalidate() }
+        do {
+            return try await session.data(for: request)
+        } catch {
+            let primaryError = error
+            guard retryWithSharedSession else {
+                throw primaryError
+            }
+            do {
+                return try await URLSession.shared.data(for: request)
+            } catch {
+                throw SceneUploadError.server("Primary request failed: \(Self.describe(primaryError)); shared session retry failed: \(Self.describe(error))")
+            }
         }
     }
 
