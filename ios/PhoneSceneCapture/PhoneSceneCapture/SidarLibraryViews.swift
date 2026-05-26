@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 struct SceneGalleryView: View {
     @Environment(\.dismiss) private var dismiss
@@ -23,6 +24,10 @@ struct SceneGalleryView: View {
     @State private var uploadingSceneURL: URL?
     @State private var uploadedSceneIDs = SceneUploadHistory.load()
     @State private var failedUploadSceneIDs: Set<String> = []
+    @State private var isPreparingShare = false
+    @State private var shareProgress: SceneArchiveProgress?
+    @State private var sharingSceneURL: URL?
+    @State private var shareItem: SceneShareItem?
 
     var body: some View {
         NavigationStack {
@@ -71,6 +76,17 @@ struct SceneGalleryView: View {
                                         .progressViewStyle(.linear)
                                         .tint(.green)
                                     Text("\(Int(round(uploadProgress.fraction * 100.0)))%")
+                                        .font(SidarFont.caption)
+                                        .monospacedDigit()
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            if let shareProgress {
+                                HStack(spacing: 10) {
+                                    ProgressView(value: shareProgress.fraction)
+                                        .progressViewStyle(.linear)
+                                        .tint(.purple)
+                                    Text("\(Int(round(shareProgress.fraction * 100.0)))%")
                                         .font(SidarFont.caption)
                                         .monospacedDigit()
                                         .foregroundStyle(.secondary)
@@ -129,6 +145,9 @@ struct SceneGalleryView: View {
             .sheet(isPresented: $showingUploadSettings) {
                 SceneUploadSettingsView(settings: $uploadSettings)
             }
+            .sheet(item: $shareItem) { item in
+                SceneShareSheet(items: [item.url])
+            }
             .onChange(of: recorder.completedSceneForAnnotation) { _, _ in
                 refresh()
             }
@@ -157,6 +176,13 @@ struct SceneGalleryView: View {
                         Label(uploadMenuTitle(for: scene), systemImage: "arrow.up.circle")
                     }
                     .disabled(isUploading)
+
+                    Button {
+                        share(scene)
+                    } label: {
+                        Label(shareMenuTitle(for: scene), systemImage: "square.and.arrow.up")
+                    }
+                    .disabled(isPreparingShare)
 
                     Button {
                         prepareAnnotation(for: scene)
@@ -360,6 +386,39 @@ struct SceneGalleryView: View {
         }
     }
 
+    private func share(_ scene: SceneRecord) {
+        guard !isPreparingShare else { return }
+        isPreparingShare = true
+        sharingSceneURL = scene.url
+        shareProgress = SceneArchiveProgress(fraction: 0.0, message: "Preparing ZIP")
+        status = "Preparing ZIP for \(scene.displayName)"
+        let sceneURL = scene.url
+
+        DispatchQueue.global(qos: .utility).async {
+            let result = Result {
+                try SceneArchiveExporter.makeZIP(sceneURL: sceneURL) { progress in
+                    DispatchQueue.main.async {
+                        shareProgress = progress
+                        status = "\(progress.message) \(Int(round(progress.fraction * 100.0)))%"
+                    }
+                }
+            }
+
+            DispatchQueue.main.async {
+                isPreparingShare = false
+                sharingSceneURL = nil
+                shareProgress = nil
+                switch result {
+                case .success(let zipURL):
+                    status = "ZIP ready: \(zipURL.lastPathComponent)"
+                    shareItem = SceneShareItem(url: zipURL)
+                case .failure(let error):
+                    status = "Share failed for \(scene.displayName): \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
     private func uploadMenuTitle(for scene: SceneRecord) -> String {
         if let uploadingSceneURL, sameScene(uploadingSceneURL, scene.url) {
             return "Uploading..."
@@ -371,6 +430,13 @@ struct SceneGalleryView: View {
             return "Upload Again"
         }
         return "Upload"
+    }
+
+    private func shareMenuTitle(for scene: SceneRecord) -> String {
+        if let sharingSceneURL, sameScene(sharingSceneURL, scene.url) {
+            return "Preparing ZIP..."
+        }
+        return "Share ZIP"
     }
 
     private func uploadBadgeStatus(for scene: SceneRecord) -> (text: String, systemImage: String) {
@@ -780,6 +846,26 @@ private struct SceneUploadProgress {
     let message: String
 }
 
+private struct SceneArchiveProgress {
+    let fraction: Double
+    let message: String
+}
+
+private struct SceneShareItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct SceneShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
 private struct SceneUploadFile {
     let url: URL
     let relativePath: String
@@ -1147,6 +1233,277 @@ private enum SceneUploadError: LocalizedError {
             return "The receiver returned an invalid response."
         case .server(let message):
             return message
+        }
+    }
+}
+
+private enum SceneArchiveExporter {
+    private struct ArchiveEntry {
+        let url: URL
+        let relativePath: String
+        var size: UInt64 = 0
+        var crc32: UInt32 = 0
+        var localHeaderOffset: UInt64 = 0
+    }
+
+    static func makeZIP(
+        sceneURL: URL,
+        progress: (SceneArchiveProgress) -> Void
+    ) throws -> URL {
+        var entries = try collectFiles(sceneURL: sceneURL)
+        guard !entries.isEmpty else {
+            throw SceneArchiveError.emptyScene
+        }
+
+        for index in entries.indices {
+            let fraction = entries.count > 0 ? Double(index) / Double(entries.count) * 0.35 : 0.0
+            progress(SceneArchiveProgress(fraction: fraction, message: "Scanning files"))
+            let stats = try checksumAndSize(for: entries[index].url)
+            entries[index].crc32 = stats.crc32
+            entries[index].size = stats.size
+            _ = try checkedUInt32(stats.size, field: "file size")
+        }
+
+        let exportsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SIDARExports", isDirectory: true)
+        try FileManager.default.createDirectory(at: exportsURL, withIntermediateDirectories: true)
+        let zipURL = exportsURL.appendingPathComponent("\(sceneURL.lastPathComponent).zip")
+        if FileManager.default.fileExists(atPath: zipURL.path) {
+            try FileManager.default.removeItem(at: zipURL)
+        }
+        guard FileManager.default.createFile(atPath: zipURL.path, contents: nil) else {
+            throw SceneArchiveError.cannotCreateArchive
+        }
+
+        let output = try FileHandle(forWritingTo: zipURL)
+        defer { try? output.close() }
+
+        var offset: UInt64 = 0
+        func write(_ data: Data) throws {
+            try output.write(contentsOf: data)
+            offset += UInt64(data.count)
+            _ = try checkedUInt32(offset, field: "archive size")
+        }
+
+        for index in entries.indices {
+            let fraction = 0.35 + (Double(index) / Double(entries.count) * 0.55)
+            progress(SceneArchiveProgress(fraction: fraction, message: "Writing ZIP"))
+            entries[index].localHeaderOffset = offset
+            _ = try checkedUInt32(offset, field: "local header offset")
+            try write(localHeader(for: entries[index]))
+            try copyFile(entries[index].url, into: output) { bytesWritten in
+                offset += bytesWritten
+                _ = try checkedUInt32(offset, field: "archive size")
+            }
+        }
+
+        progress(SceneArchiveProgress(fraction: 0.92, message: "Finalizing ZIP"))
+        let centralDirectoryOffset = offset
+        for entry in entries {
+            try write(centralDirectoryHeader(for: entry))
+        }
+        let centralDirectorySize = offset - centralDirectoryOffset
+        try write(endOfCentralDirectory(
+            entryCount: entries.count,
+            centralDirectorySize: centralDirectorySize,
+            centralDirectoryOffset: centralDirectoryOffset
+        ))
+        progress(SceneArchiveProgress(fraction: 1.0, message: "ZIP ready"))
+        return zipURL
+    }
+
+    private static func collectFiles(sceneURL: URL) throws -> [ArchiveEntry] {
+        let keys: [URLResourceKey] = [.isRegularFileKey]
+        guard let enumerator = FileManager.default.enumerator(
+            at: sceneURL,
+            includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles]
+        ) else {
+            throw SceneArchiveError.emptyScene
+        }
+
+        let basePath = sceneURL.standardizedFileURL.path
+        let rootName = sceneURL.lastPathComponent
+        var entries: [ArchiveEntry] = []
+        for case let fileURL as URL in enumerator {
+            let values = try fileURL.resourceValues(forKeys: Set(keys))
+            guard values.isRegularFile == true else { continue }
+            let filePath = fileURL.standardizedFileURL.path
+            guard filePath.hasPrefix(basePath + "/") else { continue }
+            let relative = String(filePath.dropFirst(basePath.count + 1))
+            entries.append(ArchiveEntry(
+                url: fileURL,
+                relativePath: "\(rootName)/\(relative)"
+            ))
+        }
+        return entries.sorted { $0.relativePath < $1.relativePath }
+    }
+
+    private static func checksumAndSize(for url: URL) throws -> (crc32: UInt32, size: UInt64) {
+        let input = try FileHandle(forReadingFrom: url)
+        defer { try? input.close() }
+        var crc = CRC32()
+        var size: UInt64 = 0
+        while let chunk = try input.read(upToCount: 1024 * 1024), !chunk.isEmpty {
+            crc.update(chunk)
+            size += UInt64(chunk.count)
+        }
+        return (crc.checksum, size)
+    }
+
+    private static func copyFile(
+        _ url: URL,
+        into output: FileHandle,
+        didWrite: (UInt64) throws -> Void
+    ) throws {
+        let input = try FileHandle(forReadingFrom: url)
+        defer { try? input.close() }
+        while let chunk = try input.read(upToCount: 1024 * 1024), !chunk.isEmpty {
+            try output.write(contentsOf: chunk)
+            try didWrite(UInt64(chunk.count))
+        }
+    }
+
+    private static func localHeader(for entry: ArchiveEntry) throws -> Data {
+        let name = try encodedName(entry.relativePath)
+        var data = Data()
+        data.appendUInt32LE(0x04034b50)
+        data.appendUInt16LE(20)
+        data.appendUInt16LE(0x0800)
+        data.appendUInt16LE(0)
+        data.appendUInt16LE(0)
+        data.appendUInt16LE(0)
+        data.appendUInt32LE(entry.crc32)
+        data.appendUInt32LE(try checkedUInt32(entry.size, field: "compressed size"))
+        data.appendUInt32LE(try checkedUInt32(entry.size, field: "uncompressed size"))
+        data.appendUInt16LE(try checkedUInt16(name.count, field: "file name length"))
+        data.appendUInt16LE(0)
+        data.append(name)
+        return data
+    }
+
+    private static func centralDirectoryHeader(for entry: ArchiveEntry) throws -> Data {
+        let name = try encodedName(entry.relativePath)
+        var data = Data()
+        data.appendUInt32LE(0x02014b50)
+        data.appendUInt16LE(20)
+        data.appendUInt16LE(20)
+        data.appendUInt16LE(0x0800)
+        data.appendUInt16LE(0)
+        data.appendUInt16LE(0)
+        data.appendUInt16LE(0)
+        data.appendUInt32LE(entry.crc32)
+        data.appendUInt32LE(try checkedUInt32(entry.size, field: "compressed size"))
+        data.appendUInt32LE(try checkedUInt32(entry.size, field: "uncompressed size"))
+        data.appendUInt16LE(try checkedUInt16(name.count, field: "file name length"))
+        data.appendUInt16LE(0)
+        data.appendUInt16LE(0)
+        data.appendUInt16LE(0)
+        data.appendUInt16LE(0)
+        data.appendUInt32LE(0)
+        data.appendUInt32LE(try checkedUInt32(entry.localHeaderOffset, field: "local header offset"))
+        data.append(name)
+        return data
+    }
+
+    private static func endOfCentralDirectory(
+        entryCount: Int,
+        centralDirectorySize: UInt64,
+        centralDirectoryOffset: UInt64
+    ) throws -> Data {
+        var data = Data()
+        data.appendUInt32LE(0x06054b50)
+        data.appendUInt16LE(0)
+        data.appendUInt16LE(0)
+        data.appendUInt16LE(try checkedUInt16(entryCount, field: "entry count"))
+        data.appendUInt16LE(try checkedUInt16(entryCount, field: "entry count"))
+        data.appendUInt32LE(try checkedUInt32(centralDirectorySize, field: "central directory size"))
+        data.appendUInt32LE(try checkedUInt32(centralDirectoryOffset, field: "central directory offset"))
+        data.appendUInt16LE(0)
+        return data
+    }
+
+    private static func encodedName(_ name: String) throws -> Data {
+        guard let data = name.data(using: .utf8) else {
+            throw SceneArchiveError.invalidFileName(name)
+        }
+        return data
+    }
+
+    private static func checkedUInt16(_ value: Int, field: String) throws -> UInt16 {
+        guard value <= Int(UInt16.max) else {
+            throw SceneArchiveError.zipLimitExceeded(field)
+        }
+        return UInt16(value)
+    }
+
+    private static func checkedUInt32(_ value: UInt64, field: String) throws -> UInt32 {
+        guard value <= UInt64(UInt32.max) else {
+            throw SceneArchiveError.zipLimitExceeded(field)
+        }
+        return UInt32(value)
+    }
+}
+
+private enum SceneArchiveError: LocalizedError {
+    case emptyScene
+    case cannotCreateArchive
+    case invalidFileName(String)
+    case zipLimitExceeded(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .emptyScene:
+            return "The scene has no files to share."
+        case .cannotCreateArchive:
+            return "Could not create the ZIP archive."
+        case .invalidFileName(let name):
+            return "Could not encode file name \(name)."
+        case .zipLimitExceeded(let field):
+            return "The scene is too large for the built-in ZIP exporter (\(field) exceeds 4 GB). Use Files/iTunes file sharing for this capture."
+        }
+    }
+}
+
+private struct CRC32 {
+    private static let table: [UInt32] = (0..<256).map { value in
+        var crc = UInt32(value)
+        for _ in 0..<8 {
+            if crc & 1 == 1 {
+                crc = (crc >> 1) ^ 0xedb88320
+            } else {
+                crc >>= 1
+            }
+        }
+        return crc
+    }
+
+    private var value: UInt32 = 0xffffffff
+
+    mutating func update(_ data: Data) {
+        for byte in data {
+            let index = Int((value ^ UInt32(byte)) & 0xff)
+            value = (value >> 8) ^ Self.table[index]
+        }
+    }
+
+    var checksum: UInt32 {
+        value ^ 0xffffffff
+    }
+}
+
+private extension Data {
+    mutating func appendUInt16LE(_ value: UInt16) {
+        var littleEndian = value.littleEndian
+        Swift.withUnsafeBytes(of: &littleEndian) { bytes in
+            append(contentsOf: bytes)
+        }
+    }
+
+    mutating func appendUInt32LE(_ value: UInt32) {
+        var littleEndian = value.littleEndian
+        Swift.withUnsafeBytes(of: &littleEndian) { bytes in
+            append(contentsOf: bytes)
         }
     }
 }
