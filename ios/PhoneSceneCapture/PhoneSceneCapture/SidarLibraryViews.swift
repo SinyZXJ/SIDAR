@@ -772,8 +772,18 @@ private struct SceneUploader {
             throw SceneUploadError.invalidSettings
         }
 
-        try await checkHealth(baseURL: baseURL)
-        try await checkAuth(baseURL: baseURL)
+        do {
+            try await checkHealth(baseURL: baseURL)
+        } catch {
+            throw SceneUploadError.server("Health check failed at \(baseURL.appendingPathComponent("health").absoluteString): \(Self.describe(error))")
+        }
+
+        do {
+            try await checkAuth(baseURL: baseURL)
+        } catch {
+            throw SceneUploadError.server("Token check failed at \(baseURL.appendingPathComponent("api/uploads/auth-check").absoluteString): \(Self.describe(error))")
+        }
+
         return "Connected to \(baseURL.absoluteString). Receiver and token are OK."
     }
 
@@ -914,7 +924,7 @@ private struct SceneUploader {
 
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
-        request.timeoutInterval = 30
+        request.timeoutInterval = 120
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         applyToken(to: &request)
         let delegate = SceneUploadTaskDelegate { sent in
@@ -952,7 +962,7 @@ private struct SceneUploader {
     private func checkHealth(baseURL: URL) async throws {
         var request = URLRequest(url: baseURL.appendingPathComponent("health"))
         request.httpMethod = "GET"
-        request.timeoutInterval = 8
+        request.timeoutInterval = 30
         let (data, response) = try await URLSession(configuration: shortRequestConfiguration).data(for: request)
         let health = try decodeUploadResponse(data: data, response: response, as: SceneUploadHealthResponse.self)
         guard health.status == "ok" else {
@@ -963,7 +973,7 @@ private struct SceneUploader {
     private func checkAuth(baseURL: URL) async throws {
         var request = URLRequest(url: baseURL.appendingPathComponent("api/uploads/auth-check"))
         request.httpMethod = "GET"
-        request.timeoutInterval = 8
+        request.timeoutInterval = 30
         applyToken(to: &request)
         let (data, response) = try await URLSession(configuration: shortRequestConfiguration).data(for: request)
         let auth = try decodeUploadResponse(data: data, response: response, as: SceneUploadHealthResponse.self)
@@ -975,7 +985,7 @@ private struct SceneUploader {
     private func postJSON<T: Encodable, U: Decodable>(_ body: T, to url: URL) async throws -> U {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 15
+        request.timeoutInterval = 60
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         applyToken(to: &request)
         request.httpBody = try JSONEncoder().encode(body)
@@ -1014,17 +1024,17 @@ private struct SceneUploader {
 
     private var shortRequestConfiguration: URLSessionConfiguration {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 15
-        configuration.timeoutIntervalForResource = 30
-        configuration.waitsForConnectivity = false
+        configuration.timeoutIntervalForRequest = 30
+        configuration.timeoutIntervalForResource = 60
+        configuration.waitsForConnectivity = true
         return configuration
     }
 
     private var uploadSessionConfiguration: URLSessionConfiguration {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 30
+        configuration.timeoutIntervalForRequest = 120
         configuration.timeoutIntervalForResource = 60 * 60
-        configuration.waitsForConnectivity = false
+        configuration.waitsForConnectivity = true
         return configuration
     }
 }
