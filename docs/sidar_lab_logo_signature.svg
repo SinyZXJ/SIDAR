@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="1200" height="360" role="img" aria-label="Animated Perceptica Robotics dot logo">
+  <style>
+    svg {
+      background: #05070c;
+      font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+
+    .text {
+      fill: rgba(238, 238, 232, 0.94);
+      font-size: 108px;
+      font-weight: 700;
+      letter-spacing: -2px;
+    }
+
+    .letter {
+      opacity: 0;
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: letterIntro 1.15s cubic-bezier(.2, .8, .2, 1) var(--letter-delay) forwards;
+    }
+
+    .dot {
+      fill: rgba(238, 238, 232, 0.78);
+      stroke: rgba(238, 238, 232, 0.78);
+      stroke-width: 2;
+      transform-box: fill-box;
+      transform-origin: center;
+      opacity: 0;
+      animation:
+        dotIntro 2.6s cubic-bezier(.2, .8, .2, 1) forwards,
+        dotPulse 3.2s ease-in-out 3.1s infinite;
+      animation-delay: var(--intro-delay), calc(3.1s + var(--pulse-delay));
+    }
+
+    @keyframes dotIntro {
+      0% {
+        opacity: 0;
+        transform: scale(0.16);
+      }
+      38% {
+        opacity: 0.94;
+        transform: scale(1.26);
+      }
+      100% {
+        opacity: 0.78;
+        transform: scale(1);
+      }
+    }
+
+    @keyframes dotPulse {
+      0%, 100% {
+        opacity: 0.62;
+        transform: scale(0.88);
+      }
+      48% {
+        opacity: 0.96;
+        transform: scale(1.20);
+      }
+    }
+
+    @keyframes letterIntro {
+      0% {
+        opacity: 0;
+        transform: translateY(18px);
+      }
+      62% {
+        opacity: 0.92;
+        transform: translateY(-3px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+
+  <g>
+    <circle class="dot" style="--intro-delay: 0.32s; --pulse-delay: 0.00s" cx="165" cy="90" r="16"/>
+    <circle class="dot" style="--intro-delay: 0.22s; --pulse-delay: 0.08s" cx="219" cy="90" r="16"/>
+    <circle class="dot" style="--intro-delay: 0.24s; --pulse-delay: 0.16s" cx="273" cy="90" r="16"/>
+
+    <circle class="dot" style="--intro-delay: 0.24s; --pulse-delay: 0.12s" cx="165" cy="144" r="16"/>
+    <circle class="dot" style="--intro-delay: 0.12s; --pulse-delay: 0.20s" cx="219" cy="144" r="16"/>
+    <circle class="dot" style="--intro-delay: 0.14s; --pulse-delay: 0.28s" cx="273" cy="144" r="16"/>
+    <circle class="dot" style="--intro-delay: 0.28s; --pulse-delay: 0.36s" cx="327" cy="144" r="16"/>
+
+    <circle class="dot" style="--intro-delay: 0.22s; --pulse-delay: 0.24s" cx="165" cy="198" r="16"/>
+    <circle class="dot" style="--intro-delay: 0.10s; --pulse-delay: 0.32s" cx="219" cy="198" r="16"/>
+    <circle class="dot" style="--intro-delay: 0.12s; --pulse-delay: 0.40s" cx="273" cy="198" r="16"/>
+    <circle class="dot" style="--intro-delay: 0.26s; --pulse-delay: 0.48s" cx="327" cy="198" r="16"/>
+
+    <circle class="dot" style="--intro-delay: 0.30s; --pulse-delay: 0.36s" cx="165" cy="252" r="16"/>
+    <circle class="dot" style="--intro-delay: 0.20s; --pulse-delay: 0.44s" cx="219" cy="252" r="16"/>
+    <circle class="dot" style="--intro-delay: 0.22s; --pulse-delay: 0.52s" cx="273" cy="252" r="16"/>
+
+    <circle class="dot" style="--intro-delay: 0.42s; --pulse-delay: 0.48s" cx="165" cy="306" r="16"/>
+  </g>
+
+  <g class="text">
+    <text class="letter" style="--letter-delay: 0.28s" x="430" y="108">P</text>
+    <text class="letter" style="--letter-delay: 0.34s" x="497" y="108">e</text>
+    <text class="letter" style="--letter-delay: 0.40s" x="559" y="108">r</text>
+    <text class="letter" style="--letter-delay: 0.46s" x="600" y="108">c</text>
+    <text class="letter" style="--letter-delay: 0.52s" x="652" y="108">e</text>
+    <text class="letter" style="--letter-delay: 0.58s" x="714" y="108">p</text>
+    <text class="letter" style="--letter-delay: 0.64s" x="783" y="108">t</text>
+    <text class="letter" style="--letter-delay: 0.70s" x="821" y="108">i</text>
+    <text class="letter" style="--letter-delay: 0.76s" x="851" y="108">c</text>
+    <text class="letter" style="--letter-delay: 0.82s" x="903" y="108">a</text>
+
+    <text class="letter" style="--letter-delay: 0.48s" x="430" y="214">R</text>
+    <text class="letter" style="--letter-delay: 0.54s" x="500" y="214">o</text>
+    <text class="letter" style="--letter-delay: 0.60s" x="566" y="214">b</text>
+    <text class="letter" style="--letter-delay: 0.66s" x="635" y="214">o</text>
+    <text class="letter" style="--letter-delay: 0.72s" x="701" y="214">t</text>
+    <text class="letter" style="--letter-delay: 0.78s" x="739" y="214">i</text>
+    <text class="letter" style="--letter-delay: 0.84s" x="769" y="214">c</text>
+    <text class="letter" style="--letter-delay: 0.90s" x="821" y="214">s</text>
+  </g>
+</svg>

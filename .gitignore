@@ -1,0 +1,30 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# Phone captures and generated assets are large.
+data/
+outputs/
+*.phonescene/
+*.db3
+*.mcap
+*.bag
+*.usdc
+*.usd
+*.usda
+*.ply
+*.obj
+
+# Xcode local state.
+ios/**/xcuserdata/
+ios/**/DerivedData/
+ios/**/build/
+ios/**/*.xcuserstate

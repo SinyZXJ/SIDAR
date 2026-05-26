@@ -1,0 +1,15 @@
+render:
+  width: 1280
+  height: 720
+  fps: 10.0
+  max_depth_m: 8.0
+  trajectory_source: phone
+  dummy_semantic_label: 25
+frames:
+  stride: 1
+mesh:
+  mode: arkit-mesh
+  frame_stride: 5
+  pixel_stride: 4
+  max_depth_m: 8.0
+  max_triangle_edge_m: 0.15

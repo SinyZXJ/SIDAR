@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="1200" height="360" role="img" aria-label="Perceptica Robotics logo">
+  <rect width="100%" height="100%" fill="#05070c"/>
+  <g fill="#ffffff" stroke="#ffffff" stroke-width="2">
+  <circle cx="165.000" cy="90.000" r="16"/>
+  <circle cx="219.000" cy="90.000" r="16"/>
+  <circle cx="273.000" cy="90.000" r="16"/>
+  <circle cx="165.000" cy="144.000" r="16"/>
+  <circle cx="219.000" cy="144.000" r="16"/>
+  <circle cx="273.000" cy="144.000" r="16"/>
+  <circle cx="327.000" cy="144.000" r="16"/>
+  <circle cx="165.000" cy="198.000" r="16"/>
+  <circle cx="219.000" cy="198.000" r="16"/>
+  <circle cx="273.000" cy="198.000" r="16"/>
+  <circle cx="327.000" cy="198.000" r="16"/>
+  <circle cx="165.000" cy="252.000" r="16"/>
+  <circle cx="219.000" cy="252.000" r="16"/>
+  <circle cx="273.000" cy="252.000" r="16"/>
+  <circle cx="165.000" cy="306.000" r="16"/>
+  </g>
+  <style>.word { font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 108px; font-weight: 700; letter-spacing: -2px; fill: #ffffff; }</style>
+  <text class="word" x="430" y="162">Perceptica</text>
+  <text class="word" x="430" y="266">Robotics</text>
+</svg>

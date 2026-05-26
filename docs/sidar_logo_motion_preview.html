@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SIDAR Dot Logo Motion Preview</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #05070c;
+      --panel: rgba(255, 255, 255, 0.075);
+      --panel-border: rgba(255, 255, 255, 0.13);
+      --text: rgba(255, 255, 255, 0.88);
+      --muted: rgba(255, 255, 255, 0.58);
+      --accent: #7cd7ff;
+      --glow: rgba(255, 255, 255, 0.07);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 52% 48%, rgba(120, 150, 255, 0.14), transparent 26rem),
+        radial-gradient(circle at 16% 18%, rgba(52, 190, 255, 0.16), transparent 20rem),
+        linear-gradient(135deg, #0b0f18 0%, var(--bg) 54%, #000 100%);
+      color: var(--text);
+      font-family: "Times New Roman", Times, serif;
+      overflow: hidden;
+    }
+
+    .page {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(360px, 46vw) minmax(360px, 1fr);
+      gap: 42px;
+      align-items: center;
+      padding: 7vh 8vw;
+    }
+
+    .stage {
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-height: 520px;
+      border: 1px solid var(--panel-border);
+      border-radius: 28px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025)),
+        rgba(255, 255, 255, 0.035);
+      box-shadow:
+        0 30px 90px rgba(0, 0, 0, 0.42),
+        inset 0 1px 0 rgba(255, 255, 255, 0.10);
+      overflow: hidden;
+    }
+
+    .stage::before {
+      content: "";
+      position: absolute;
+      width: 58%;
+      aspect-ratio: 1;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.07), transparent 68%);
+      filter: blur(10px);
+      animation: halo 7.5s ease-in-out infinite;
+    }
+
+    @keyframes halo {
+      0%, 100% { transform: scale(0.92); opacity: 0.24; }
+      50% { transform: scale(1.08); opacity: 0.38; }
+    }
+
+    canvas {
+      position: relative;
+      width: min(430px, 72vw);
+      height: min(430px, 72vw);
+      filter: drop-shadow(0 0 12px var(--glow));
+    }
+
+    .copy {
+      max-width: 620px;
+    }
+
+    .eyebrow {
+      margin: 0 0 12px;
+      color: var(--accent);
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(56px, 8vw, 116px);
+      font-weight: 400;
+      line-height: 0.9;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 560px;
+      margin: 22px 0 34px;
+      color: var(--muted);
+      font-size: clamp(19px, 2vw, 29px);
+      line-height: 1.22;
+    }
+
+    .controls {
+      display: grid;
+      gap: 16px;
+      max-width: 560px;
+      padding: 18px;
+      border: 1px solid var(--panel-border);
+      border-radius: 18px;
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.24);
+    }
+
+    .mode-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--text);
+      min-height: 44px;
+      font: inherit;
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    button.active {
+      border-color: rgba(124, 215, 255, 0.72);
+      background: rgba(124, 215, 255, 0.18);
+      color: white;
+      box-shadow: 0 0 24px rgba(124, 215, 255, 0.18);
+    }
+
+    .slider-row {
+      display: grid;
+      grid-template-columns: 82px 1fr 54px;
+      gap: 12px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .note {
+      color: rgba(255, 255, 255, 0.46);
+      font-size: 15px;
+      line-height: 1.35;
+    }
+
+    @media (max-width: 900px) {
+      body {
+        overflow: auto;
+      }
+
+      .page {
+        grid-template-columns: 1fr;
+        padding: 32px;
+      }
+
+      .stage {
+        min-height: 420px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="stage" aria-label="Animated SIDAR dot logo">
+      <canvas id="logo" width="900" height="900"></canvas>
+    </section>
+
+    <section class="copy">
+      <p class="eyebrow">Programmatic logo motion study</p>
+      <h1>SIDAR</h1>
+      <p class="subtitle">A dot-matrix logo with a pulse entrance and a quiet continuous motion, without relying on a static image.</p>
+
+      <div class="controls">
+        <div class="mode-row" role="group" aria-label="Animation mode">
+          <button class="active" data-mode="signature">Signature</button>
+          <button data-mode="breath">Breath</button>
+          <button data-mode="pulse">Pulse</button>
+        </div>
+
+        <label class="slider-row">
+          <span>Speed</span>
+          <input id="speed" type="range" min="0.35" max="2.2" value="1.0" step="0.05">
+          <span id="speedValue">1.00</span>
+        </label>
+
+        <label class="slider-row">
+          <span>Depth</span>
+          <input id="depth" type="range" min="0.05" max="0.55" value="0.16" step="0.01">
+          <span id="depthValue">0.16</span>
+        </label>
+
+        <div class="note">
+          Signature mode uses a pulse entrance followed by a quiet continuous pulse. The dot layout is fully code-defined and can be reused in SwiftUI Canvas.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const canvas = document.getElementById("logo");
+    const ctx = canvas.getContext("2d");
+    const buttons = [...document.querySelectorAll("[data-mode]")];
+    const speedInput = document.getElementById("speed");
+    const depthInput = document.getElementById("depth");
+    const speedValue = document.getElementById("speedValue");
+    const depthValue = document.getElementById("depthValue");
+
+    let modeStartTime = performance.now();
+    let introDuration = 2.6;
+    let settleDuration = 1.1;
+    let idleAmplitude = 0.12;
+    let introAmplitude = 0.72;
+
+    let modeState = { value: "signature", startedAt: modeStartTime };
+
+    const dots = [
+      [0, 0], [1, 0], [2, 0],
+      [0, 1], [1, 1], [2, 1], [3, 1],
+      [0, 2], [1, 2], [2, 2], [3, 2],
+      [0, 3], [1, 3], [2, 3],
+      [0, 4]
+    ];
+
+    const center = dots.reduce(
+      (acc, dot) => [acc[0] + dot[0] / dots.length, acc[1] + dot[1] / dots.length],
+      [0, 0]
+    );
+
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        modeState.value = button.dataset.mode;
+        modeState.startedAt = performance.now();
+        buttons.forEach((item) => item.classList.toggle("active", item === button));
+      });
+    });
+
+    function ease(value) {
+      return 0.5 - 0.5 * Math.cos(Math.PI * Math.max(0, Math.min(1, value)));
+    }
+
+    function smoothstep(edge0, edge1, value) {
+      const x = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+      return x * x * (3 - 2 * x);
+    }
+
+    function draw(time) {
+      const t = time / 1000 * Number(speedInput.value);
+      const modeAge = (time - modeState.startedAt) / 1000;
+      const depth = Number(depthInput.value);
+      speedValue.textContent = Number(speedInput.value).toFixed(2);
+      depthValue.textContent = depth.toFixed(2);
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const gradient = ctx.createRadialGradient(450, 450, 60, 450, 450, 430);
+      gradient.addColorStop(0, "rgba(255, 255, 255, 0.035)");
+      gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const spacing = 126;
+      const baseRadius = 32;
+      const originX = 450 - center[0] * spacing;
+      const originY = 450 - center[1] * spacing;
+
+      dots.forEach((dot, index) => {
+        const dx = dot[0] - center[0];
+        const dy = dot[1] - center[1];
+        const distance = Math.hypot(dx, dy);
+        let wave = 0;
+        let travel = 0;
+        let appear = 1;
+        let alphaBase = 0.54;
+        let strokeBoost = 0.0;
+
+        if (modeState.value === "signature") {
+          const delay = distance * 0.18 + index * 0.035;
+          const localIntro = smoothstep(delay, delay + 0.72, modeAge);
+          const introWave = Math.max(0, Math.sin((localIntro * Math.PI)));
+          const idleWave = (Math.sin(t * 1.35 - distance * 1.55) + 1) / 2;
+          const introBlendOut = 1 - smoothstep(introDuration, introDuration + settleDuration, modeAge);
+          appear = localIntro;
+          wave = idleWave * idleAmplitude + introWave * introAmplitude * introBlendOut;
+          travel = (wave - idleAmplitude * 0.5) * 6;
+          alphaBase = 0.50;
+          strokeBoost = 0.02;
+        } else if (modeState.value === "breath") {
+          wave = Math.sin(t * 1.75 + index * 0.38);
+          travel = Math.sin(t * 1.15 + distance * 0.7) * 5;
+        } else {
+          const ring = (Math.sin(t * 1.9 - distance * 1.25) + 1) / 2;
+          wave = ease(ring);
+          travel = (wave - 0.5) * 12;
+        }
+
+        const normalized = modeState.value === "breath" ? (wave + 1) / 2 : wave;
+        const radius = baseRadius * appear * (1 + depth * (normalized * 1.1 - 0.28));
+        const alpha = appear * (alphaBase + normalized * 0.24);
+        const glowRadius = radius * (1.26 + normalized * 0.38);
+        const x = originX + dot[0] * spacing + dx * travel;
+        const y = originY + dot[1] * spacing + dy * travel;
+
+        const dotGradient = ctx.createRadialGradient(x, y, radius * 0.15, x, y, glowRadius);
+        dotGradient.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
+        dotGradient.addColorStop(0.72, `rgba(255, 255, 255, ${alpha * 0.18})`);
+        dotGradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+        ctx.fillStyle = dotGradient;
+        ctx.beginPath();
+        ctx.arc(x, y, glowRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        const dotColor = Math.min(1, alpha + 0.12);
+        ctx.fillStyle = `rgba(255, 255, 255, ${dotColor})`;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = `rgba(255, 255, 255, ${Math.min(0.9, dotColor + strokeBoost)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, radius + 1.4, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+
+      requestAnimationFrame(draw);
+    }
+
+    requestAnimationFrame(draw);
+  </script>
+</body>
+</html>
