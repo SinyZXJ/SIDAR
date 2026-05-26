@@ -603,7 +603,7 @@ private struct SceneUploadSettings: Equatable {
             withScheme.removeLast()
         }
         guard let components = URLComponents(string: withScheme),
-              components.scheme == "http" || components.scheme == "https",
+              components.scheme == "http",
               components.host != nil else {
             return nil
         }
@@ -649,7 +649,7 @@ private struct SceneUploadSettingsView: View {
                 } header: {
                     Text("Receiver")
                 } footer: {
-                    Text("Run phone-scene receive on your workstation, then enter the shown URL or IP address here.")
+                    Text("Run phone-scene receive on your workstation, then enter the receiver URL with http://. The built-in receiver is plain HTTP, not HTTPS.")
                 }
 
                 Section("Workstation Command") {
@@ -660,7 +660,7 @@ private struct SceneUploadSettingsView: View {
 
                 if previewSettings.normalizedBaseURL == nil && !serverURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Section {
-                        Label("Receiver URL is not valid.", systemImage: "exclamationmark.triangle")
+                        Label("Receiver URL is not valid. Use http://IP:8765, not https://.", systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.orange)
                     }
                 }
