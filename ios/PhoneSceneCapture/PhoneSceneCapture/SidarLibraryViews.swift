@@ -354,7 +354,7 @@ struct SceneGalleryView: View {
                     uploadingSceneURL = nil
                     uploadProgress = nil
                     failedUploadSceneIDs.insert(scene.id)
-                    status = "Upload failed for \(scene.displayName): \(error.localizedDescription)"
+                    status = "Upload failed for \(scene.displayName): \(SceneUploader.describe(error))"
                 }
             }
         }
@@ -628,6 +628,8 @@ private struct SceneUploadSettingsView: View {
     @Binding var settings: SceneUploadSettings
     @State private var serverURL: String
     @State private var token: String
+    @State private var isTesting = false
+    @State private var testStatus: String?
 
     init(settings: Binding<SceneUploadSettings>) {
         _settings = settings
@@ -656,6 +658,28 @@ private struct SceneUploadSettingsView: View {
                     Text("phone-scene receive --output-dir /path/to/scenes --host 0.0.0.0 --port 8765 --token YOUR_TOKEN")
                         .font(SidarFont.caption)
                         .textSelection(.enabled)
+                }
+
+                Section("Connection Test") {
+                    Button {
+                        testConnection()
+                    } label: {
+                        HStack {
+                            Label("Test Receiver", systemImage: "network")
+                            Spacer()
+                            if isTesting {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(isTesting || previewSettings.normalizedBaseURL == nil)
+
+                    if let testStatus {
+                        Text(testStatus)
+                            .font(SidarFont.caption)
+                            .foregroundStyle(testStatus.hasPrefix("Connected") ? .green : .orange)
+                            .textSelection(.enabled)
+                    }
                 }
 
                 if previewSettings.normalizedBaseURL == nil && !serverURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -690,6 +714,31 @@ private struct SceneUploadSettingsView: View {
     private var previewSettings: SceneUploadSettings {
         SceneUploadSettings(serverURL: serverURL, token: token)
     }
+
+    private func testConnection() {
+        let settings = previewSettings
+        guard settings.normalizedBaseURL != nil else {
+            testStatus = "Use http://IP:8765 before testing."
+            return
+        }
+
+        isTesting = true
+        testStatus = "Testing receiver..."
+        Task {
+            do {
+                let summary = try await SceneUploader(settings: settings).testConnection()
+                await MainActor.run {
+                    isTesting = false
+                    testStatus = summary
+                }
+            } catch {
+                await MainActor.run {
+                    isTesting = false
+                    testStatus = "Connection failed: \(SceneUploader.describe(error))"
+                }
+            }
+        }
+    }
 }
 
 private struct SceneUploadHistory {
@@ -717,6 +766,31 @@ private struct SceneUploadFile {
 
 private struct SceneUploader {
     let settings: SceneUploadSettings
+
+    func testConnection() async throws -> String {
+        guard let baseURL = settings.normalizedBaseURL else {
+            throw SceneUploadError.invalidSettings
+        }
+
+        try await checkHealth(baseURL: baseURL)
+        try await checkAuth(baseURL: baseURL)
+        return "Connected to \(baseURL.absoluteString). Receiver and token are OK."
+    }
+
+    static func describe(_ error: Error) -> String {
+        if let uploadError = error as? SceneUploadError,
+           let description = uploadError.errorDescription {
+            return description
+        }
+        if let urlError = error as? URLError {
+            return "\(urlError.localizedDescription) (\(urlError.code.rawValue))"
+        }
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            return "\(nsError.localizedDescription) (\(nsError.code))"
+        }
+        return error.localizedDescription
+    }
 
     func upload(
         scene: SceneRecord,
@@ -780,11 +854,11 @@ private struct SceneUploader {
             )
             await progress(SceneUploadProgress(fraction: 1.0, message: "Upload complete"))
             return finishResponse
-        } catch {
-            try? await postJSONNoResponse(
-                SceneUploadFinishRequest(upload_id: startResponse.upload_id),
-                to: baseURL.appendingPathComponent("api/uploads/cancel")
-            )
+            } catch {
+                try? await postJSONNoResponse(
+                    SceneUploadFinishRequest(upload_id: startResponse.upload_id),
+                    to: baseURL.appendingPathComponent("api/uploads/cancel")
+                )
             throw error
         }
     }
@@ -883,6 +957,18 @@ private struct SceneUploader {
         let health = try decodeUploadResponse(data: data, response: response, as: SceneUploadHealthResponse.self)
         guard health.status == "ok" else {
             throw SceneUploadError.server("Receiver health check failed.")
+        }
+    }
+
+    private func checkAuth(baseURL: URL) async throws {
+        var request = URLRequest(url: baseURL.appendingPathComponent("api/uploads/auth-check"))
+        request.httpMethod = "GET"
+        request.timeoutInterval = 8
+        applyToken(to: &request)
+        let (data, response) = try await URLSession(configuration: shortRequestConfiguration).data(for: request)
+        let auth = try decodeUploadResponse(data: data, response: response, as: SceneUploadHealthResponse.self)
+        guard auth.status == "ok" else {
+            throw SceneUploadError.server("Receiver token check failed.")
         }
     }
 
@@ -1001,7 +1087,7 @@ private enum SceneUploadError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidSettings:
-            return "Upload receiver URL is not configured."
+            return "Upload receiver URL must be http://IP:port."
         case .noFiles:
             return "The scene has no files to upload."
         case .invalidResponse:

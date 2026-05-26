@@ -194,11 +194,18 @@ class SidarUploadHandler(BaseHTTPRequestHandler):
     upload_token: str | None
 
     def do_GET(self) -> None:  # noqa: N802
-        parsed = urlparse(self.path)
-        if parsed.path == "/health":
-            self._write_json({"status": "ok", "service": "sidar-receiver"})
-            return
-        self._write_json({"error": "not found"}, status=404)
+        try:
+            parsed = urlparse(self.path)
+            if parsed.path == "/health":
+                self._write_json({"status": "ok", "service": "sidar-receiver"})
+                return
+            if parsed.path == "/api/uploads/auth-check":
+                self._require_token()
+                self._write_json({"status": "ok", "service": "sidar-receiver"})
+                return
+            self._write_json({"error": "not found"}, status=404)
+        except Exception as exc:  # pragma: no cover - exercised through CLI/manual use
+            self._write_error(exc)
 
     def do_POST(self) -> None:  # noqa: N802
         try:
