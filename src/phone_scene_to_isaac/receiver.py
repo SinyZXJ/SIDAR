@@ -152,6 +152,15 @@ def unique_scene_path(path: Path) -> Path:
     raise ReceiverError(f"could not choose a unique path for {path}")
 
 
+def format_bytes(size: int) -> str:
+    value = float(max(0, int(size)))
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024.0 or unit == "GB":
+            return f"{value:.1f} {unit}" if unit != "B" else f"{int(value)} B"
+        value /= 1024.0
+    return f"{value:.1f} GB"
+
+
 def serve_receiver(
     output_dir: Path,
     *,
@@ -202,6 +211,11 @@ class SidarUploadHandler(BaseHTTPRequestHandler):
                     int(payload.get("file_count", 0)),
                     int(payload.get("total_bytes", 0)),
                 )
+                print(
+                    f"[upload {session.upload_id[:8]}] started {session.scene_name} "
+                    f"({session.file_count} files, {format_bytes(session.total_bytes)})",
+                    flush=True,
+                )
                 self._write_json(
                     {
                         "status": "started",
@@ -212,12 +226,21 @@ class SidarUploadHandler(BaseHTTPRequestHandler):
                 return
             if parsed.path == "/api/uploads/finish":
                 payload = self._read_json()
-                result = self.upload_registry.finish(str(payload.get("upload_id", "")))
+                upload_id = str(payload.get("upload_id", ""))
+                print(f"[upload {upload_id[:8]}] finalizing", flush=True)
+                result = self.upload_registry.finish(upload_id)
+                print(
+                    f"[upload {upload_id[:8]}] complete -> {result['scene_path']} "
+                    f"({result['received_files']} files, {format_bytes(result['received_bytes'])})",
+                    flush=True,
+                )
                 self._write_json(result)
                 return
             if parsed.path == "/api/uploads/cancel":
                 payload = self._read_json()
-                self.upload_registry.cancel(str(payload.get("upload_id", "")))
+                upload_id = str(payload.get("upload_id", ""))
+                self.upload_registry.cancel(upload_id)
+                print(f"[upload {upload_id[:8]}] cancelled", flush=True)
                 self._write_json({"status": "cancelled"})
                 return
             self._write_json({"error": "not found"}, status=404)
@@ -235,11 +258,28 @@ class SidarUploadHandler(BaseHTTPRequestHandler):
             upload_id = query.get("upload_id", [""])[0]
             relative_path = query.get("path", [""])[0]
             length = int(self.headers.get("Content-Length", "0"))
+            print(
+                f"[upload {upload_id[:8]}] receiving {relative_path} "
+                f"({format_bytes(length)})",
+                flush=True,
+            )
             session = self.upload_registry.write_file(
                 upload_id,
                 relative_path,
                 self.rfile,
                 length,
+            )
+            percent = (
+                100.0 * float(session.received_bytes) / float(session.total_bytes)
+                if session.total_bytes > 0
+                else 100.0
+            )
+            print(
+                f"[upload {session.upload_id[:8]}] received "
+                f"{session.received_files}/{session.file_count} files, "
+                f"{format_bytes(session.received_bytes)} / {format_bytes(session.total_bytes)} "
+                f"({percent:.1f}%)",
+                flush=True,
             )
             self._write_json(
                 {
@@ -253,7 +293,7 @@ class SidarUploadHandler(BaseHTTPRequestHandler):
             self._write_error(exc)
 
     def log_message(self, format: str, *args) -> None:
-        print(f"{self.address_string()} - {format % args}")
+        print(f"{self.address_string()} - {format % args}", flush=True)
 
     def _require_token(self) -> None:
         if not self.upload_token:
@@ -271,6 +311,7 @@ class SidarUploadHandler(BaseHTTPRequestHandler):
 
     def _write_error(self, exc: Exception) -> None:
         status = 400 if isinstance(exc, (ReceiverError, ValueError, json.JSONDecodeError)) else 500
+        print(f"[receiver error] {exc}", flush=True)
         self._write_json({"status": "error", "error": str(exc)}, status=status)
 
     def _write_json(self, payload: dict[str, Any], status: int = 200) -> None:

@@ -731,7 +731,9 @@ private struct SceneUploader {
             throw SceneUploadError.noFiles
         }
         let totalBytes = files.reduce(Int64(0)) { $0 + $1.size }
-        await progress(SceneUploadProgress(fraction: 0.01, message: "Starting upload"))
+        await progress(SceneUploadProgress(fraction: 0.01, message: "Checking receiver"))
+        try await checkHealth(baseURL: baseURL)
+        await progress(SceneUploadProgress(fraction: 0.02, message: "Starting upload"))
 
         let startResponse: SceneUploadStartResponse = try await postJSON(
             SceneUploadStartRequest(
@@ -744,11 +746,22 @@ private struct SceneUploader {
 
         var sentBytes: Int64 = 0
         do {
-            for file in files {
+            for (index, file) in files.enumerated() {
+                await progress(SceneUploadProgress(
+                    fraction: totalBytes > 0
+                        ? min(0.98, max(0.02, Double(sentBytes) / Double(totalBytes)))
+                        : 0.02,
+                    message: "Uploading \(index + 1)/\(files.count): \(file.relativePath)"
+                ))
                 try await uploadFile(
                     file,
                     uploadID: startResponse.upload_id,
-                    baseURL: baseURL
+                    baseURL: baseURL,
+                    completedBytes: sentBytes,
+                    totalBytes: totalBytes,
+                    fileIndex: index + 1,
+                    fileCount: files.count,
+                    progress: progress
                 )
                 sentBytes += file.size
                 let fraction = totalBytes > 0
@@ -803,7 +816,16 @@ private struct SceneUploader {
         return files.sorted { $0.relativePath < $1.relativePath }
     }
 
-    private func uploadFile(_ file: SceneUploadFile, uploadID: String, baseURL: URL) async throws {
+    private func uploadFile(
+        _ file: SceneUploadFile,
+        uploadID: String,
+        baseURL: URL,
+        completedBytes: Int64,
+        totalBytes: Int64,
+        fileIndex: Int,
+        fileCount: Int,
+        progress: @escaping (SceneUploadProgress) async -> Void
+    ) async throws {
         var components = URLComponents(
             url: baseURL.appendingPathComponent("api/uploads/file"),
             resolvingAgainstBaseURL: false
@@ -818,19 +840,60 @@ private struct SceneUploader {
 
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
+        request.timeoutInterval = 30
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         applyToken(to: &request)
-        let (data, response) = try await URLSession.shared.upload(for: request, fromFile: file.url)
+        let delegate = SceneUploadTaskDelegate { sent in
+            let totalSent = completedBytes + max(0, sent)
+            let fraction = totalBytes > 0
+                ? min(0.98, max(0.02, Double(totalSent) / Double(totalBytes)))
+                : 0.98
+            Task {
+                await progress(SceneUploadProgress(
+                    fraction: fraction,
+                    message: "Uploading \(fileIndex)/\(fileCount): \(file.relativePath)"
+                ))
+            }
+        }
+        let session = URLSession(configuration: uploadSessionConfiguration, delegate: delegate, delegateQueue: nil)
+        defer { session.finishTasksAndInvalidate() }
+        let result: (Data, URLResponse) = try await withCheckedThrowingContinuation { continuation in
+            let task = session.uploadTask(with: request, fromFile: file.url) { data, response, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                guard let data, let response else {
+                    continuation.resume(throwing: SceneUploadError.invalidResponse)
+                    return
+                }
+                continuation.resume(returning: (data, response))
+            }
+            task.resume()
+        }
+        let (data, response) = result
         _ = try decodeUploadResponse(data: data, response: response, as: SceneUploadFileResponse.self)
+    }
+
+    private func checkHealth(baseURL: URL) async throws {
+        var request = URLRequest(url: baseURL.appendingPathComponent("health"))
+        request.httpMethod = "GET"
+        request.timeoutInterval = 8
+        let (data, response) = try await URLSession(configuration: shortRequestConfiguration).data(for: request)
+        let health = try decodeUploadResponse(data: data, response: response, as: SceneUploadHealthResponse.self)
+        guard health.status == "ok" else {
+            throw SceneUploadError.server("Receiver health check failed.")
+        }
     }
 
     private func postJSON<T: Encodable, U: Decodable>(_ body: T, to url: URL) async throws -> U {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        request.timeoutInterval = 15
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         applyToken(to: &request)
         request.httpBody = try JSONEncoder().encode(body)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession(configuration: shortRequestConfiguration).data(for: request)
         return try decodeUploadResponse(data: data, response: response, as: U.self)
     }
 
@@ -862,6 +925,40 @@ private struct SceneUploader {
         }
         return try JSONDecoder().decode(type, from: data)
     }
+
+    private var shortRequestConfiguration: URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 15
+        configuration.timeoutIntervalForResource = 30
+        configuration.waitsForConnectivity = false
+        return configuration
+    }
+
+    private var uploadSessionConfiguration: URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 30
+        configuration.timeoutIntervalForResource = 60 * 60
+        configuration.waitsForConnectivity = false
+        return configuration
+    }
+}
+
+private final class SceneUploadTaskDelegate: NSObject, URLSessionTaskDelegate {
+    private let onProgress: (Int64) -> Void
+
+    init(onProgress: @escaping (Int64) -> Void) {
+        self.onProgress = onProgress
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didSendBodyData bytesSent: Int64,
+        totalBytesSent: Int64,
+        totalBytesExpectedToSend: Int64
+    ) {
+        onProgress(totalBytesSent)
+    }
 }
 
 private struct SceneUploadStartRequest: Encodable {
@@ -879,6 +976,10 @@ private struct SceneUploadFinishRequest: Encodable {
 }
 
 private struct SceneUploadFileResponse: Decodable {
+    let status: String
+}
+
+private struct SceneUploadHealthResponse: Decodable {
     let status: String
 }
 
