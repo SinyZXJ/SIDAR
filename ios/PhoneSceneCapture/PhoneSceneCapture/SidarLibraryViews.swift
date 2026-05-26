@@ -603,7 +603,8 @@ private struct SceneUploadSettings: Equatable {
             withScheme.removeLast()
         }
         guard let components = URLComponents(string: withScheme),
-              components.scheme == "http",
+              let scheme = components.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
               components.host != nil else {
             return nil
         }
@@ -652,7 +653,7 @@ private struct SceneUploadSettingsView: View {
                 } header: {
                     Text("Receiver")
                 } footer: {
-                    Text("Run phone-scene receive on your workstation, then enter the receiver URL with http://. The built-in receiver is plain HTTP, not HTTPS.")
+                    Text("Use http://IP:8765 for direct local receivers, or https://domain for a cloud receiver behind Nginx/Caddy.")
                 }
 
                 Section("Workstation Command") {
@@ -702,7 +703,7 @@ private struct SceneUploadSettingsView: View {
 
                 if previewSettings.normalizedBaseURL == nil && !serverURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Section {
-                        Label("Receiver URL is not valid. Use http://IP:8765, not https://.", systemImage: "exclamationmark.triangle")
+                        Label("Receiver URL is not valid. Use http://IP:8765 or https://domain.", systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.orange)
                     }
                 }
@@ -1140,7 +1141,7 @@ private enum SceneUploadError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidSettings:
-            return "Upload receiver URL must be http://IP:port."
+            return "Upload receiver URL must be http://IP:port or https://domain."
         case .noFiles:
             return "The scene has no files to upload."
         case .invalidResponse:
