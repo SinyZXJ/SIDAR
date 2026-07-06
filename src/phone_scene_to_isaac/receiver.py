@@ -134,10 +134,9 @@ def sanitize_scene_name(scene_name: str) -> str:
 
 def safe_relative_path(relative_path: str) -> Path:
     raw = unquote(relative_path).replace("\\", "/")
-    path = Path(raw)
-    if path.is_absolute():
+    if raw.startswith("/"):
         raise ReceiverError("absolute upload paths are not allowed")
-    parts = path.parts
+    parts = raw.split("/")
     if not parts or any(part in {"", ".", ".."} for part in parts):
         raise ReceiverError(f"unsafe upload path: {relative_path}")
     return Path(*parts)

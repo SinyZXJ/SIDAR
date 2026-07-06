@@ -1,0 +1,28 @@
+{
+  "output": "/Users/siny/Desktop/PhoneSceneToIsaac-main/paper/TRO/figures/sidar_architecture.pptx",
+  "outputBytes": 23719,
+  "slideCount": 1,
+  "slideSize": {
+    "width": 2500,
+    "height": 1000
+  },
+  "previewDir": "/Users/siny/Desktop/PhoneSceneToIsaac-main/outputs/manual-20260528-sidar/presentations/sidar-architecture/preview",
+  "previewPaths": [
+    "/Users/siny/Desktop/PhoneSceneToIsaac-main/outputs/manual-20260528-sidar/presentations/sidar-architecture/preview/slide-01.png"
+  ],
+  "layoutDir": "/Users/siny/Desktop/PhoneSceneToIsaac-main/outputs/manual-20260528-sidar/presentations/sidar-architecture/layout/final",
+  "layoutResults": [
+    {
+      "layoutPath": "/Users/siny/Desktop/PhoneSceneToIsaac-main/outputs/manual-20260528-sidar/presentations/sidar-architecture/layout/final/slide-01.layout.json"
+    }
+  ],
+  "contactSheet": "/Users/siny/Desktop/PhoneSceneToIsaac-main/outputs/manual-20260528-sidar/presentations/sidar-architecture/preview/contact-sheet.png",
+  "slides": [
+    {
+      "index": 1,
+      "requestedSlideNumber": 1,
+      "modulePath": "/Users/siny/Desktop/PhoneSceneToIsaac-main/outputs/manual-20260528-sidar/presentations/sidar-architecture/slides/slide-01.mjs",
+      "exportName": "slide01"
+    }
+  ]
+}

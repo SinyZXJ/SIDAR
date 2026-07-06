@@ -1,0 +1,17 @@
+[Unit]
+Description=SIDAR phone scene receiver
+After=network-online.target wg-quick@wg0.service
+Wants=network-online.target
+Requires=wg-quick@wg0.service
+
+[Service]
+Type=simple
+User={{SIDAR_USER}}
+EnvironmentFile=/home/{{SIDAR_USER}}/.config/sidar/receiver.env
+WorkingDirectory={{SIDAR_REPO_DIR}}
+ExecStart=/bin/bash -lc 'exec "{{SIDAR_REPO_DIR}}/.venv/bin/phone-scene" receive --output-dir "{{SIDAR_OUTPUT_DIR}}" --host "{{SIDAR_RECEIVER_HOST}}" --port "{{SIDAR_RECEIVER_PORT}}" --token "$SIDAR_TOKEN" {{SIDAR_VALIDATE_FLAG}}'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

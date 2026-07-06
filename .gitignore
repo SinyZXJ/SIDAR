@@ -10,6 +10,9 @@ dist/
 build/
 *.egg-info/
 
+# Local Codex/agent workspace state.
+.agents/
+
 # Phone captures and generated assets are large.
 data/
 outputs/

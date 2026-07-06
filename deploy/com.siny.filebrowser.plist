@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.siny.filebrowser</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/siny/.local/bin/filebrowser</string>
+    <string>-d</string>
+    <string>/Users/siny/Fileshare/config/filebrowser.db</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/siny/Fileshare</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/siny/Library/Logs/FileBrowser/filebrowser.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/siny/Library/Logs/FileBrowser/filebrowser.err.log</string>
+</dict>
+</plist>

@@ -1,6 +1,8 @@
 import Foundation
 import SwiftUI
 
+private let sidarUploadRequestTimeout: TimeInterval = 3600
+
 struct SceneGalleryView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var recorder: ARRecorder
@@ -947,7 +949,7 @@ private struct SceneUploader {
 
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
-        request.timeoutInterval = 120
+        request.timeoutInterval = sidarUploadRequestTimeout
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         applyToken(to: &request)
         let delegate = SceneUploadTaskDelegate { sent in
@@ -1076,8 +1078,8 @@ private struct SceneUploader {
 
     private var uploadSessionConfiguration: URLSessionConfiguration {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 120
-        configuration.timeoutIntervalForResource = 60 * 60
+        configuration.timeoutIntervalForRequest = sidarUploadRequestTimeout
+        configuration.timeoutIntervalForResource = sidarUploadRequestTimeout
         configuration.waitsForConnectivity = true
         return configuration
     }

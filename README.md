@@ -139,5 +139,11 @@ Then open **Gallery -> Upload Settings** in SIDAR, enter
 `http://WORKSTATION_IP:8765` and the same token, and use **Upload** on any
 recorded scene.
 
+For off-site uploads through a public VPS while storing all data on the Ubuntu
+workstation, use the WireGuard + Nginx streaming relay described in
+[docs/VPS_UPLOAD_RELAY.md](docs/VPS_UPLOAD_RELAY.md). In that setup the iPhone
+uploads to `http://45.32.115.105:8765`, the VPS proxies the stream over
+WireGuard, and the workstation receiver writes scenes to `/data/sidar/scenes`.
+
 See [docs/PHONE_SCENE_FORMAT.md](docs/PHONE_SCENE_FORMAT.md) and
 [docs/WORKFLOW.md](docs/WORKFLOW.md).
