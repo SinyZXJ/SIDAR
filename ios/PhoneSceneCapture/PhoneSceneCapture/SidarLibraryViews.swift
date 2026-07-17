@@ -60,7 +60,7 @@ struct SceneGalleryView: View {
                                 HStack(spacing: 10) {
                                     ProgressView(value: annotationProgress.fraction)
                                         .progressViewStyle(.linear)
-                                        .tint(.blue)
+                                        .tint(SidarTheme.jadeAccent)
                                     Text("\(Int(round(annotationProgress.fraction * 100.0)))%")
                                         .font(SidarFont.caption)
                                         .monospacedDigit()
@@ -71,7 +71,7 @@ struct SceneGalleryView: View {
                                 HStack(spacing: 10) {
                                     ProgressView(value: uploadProgress.fraction)
                                         .progressViewStyle(.linear)
-                                        .tint(.green)
+                                        .tint(SidarTheme.jadeAccent)
                                     Text("\(Int(round(uploadProgress.fraction * 100.0)))%")
                                         .font(SidarFont.caption)
                                         .monospacedDigit()
@@ -82,6 +82,8 @@ struct SceneGalleryView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(SidarTheme.jadeBackground)
             .navigationTitle("Gallery")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -127,6 +129,12 @@ struct SceneGalleryView: View {
             }
             .fullScreenCover(item: $annotationTarget) { target in
                 RoomAnnotationView(sceneURL: target.url)
+                    .onAppear {
+                        SidarOrientationLock.set(.landscape)
+                    }
+                    .onDisappear {
+                        SidarOrientationLock.set(.portrait)
+                    }
             }
             .sheet(isPresented: $showingUploadSettings) {
                 SceneUploadSettingsView(settings: $uploadSettings)
@@ -136,6 +144,11 @@ struct SceneGalleryView: View {
             }
         }
         .font(SidarFont.body)
+        .background(SidarTheme.jadeBackground.ignoresSafeArea())
+        .tint(SidarTheme.jadeAccent)
+        .onAppear {
+            SidarOrientationLock.set(.portrait)
+        }
     }
 
     private func sceneRow(_ scene: SceneRecord) -> some View {
@@ -144,10 +157,11 @@ struct SceneGalleryView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(scene.displayName)
                         .font(SidarFont.heavy(17, relativeTo: .headline))
+                        .foregroundStyle(SidarTheme.jadeInk)
                         .lineLimit(1)
                     Text(scene.detailText)
                         .font(SidarFont.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(SidarTheme.jadeMuted)
                 }
 
                 Spacer()
@@ -188,17 +202,7 @@ struct SceneGalleryView: View {
                 .accessibilityLabel("Scene actions")
             }
 
-            HStack(spacing: 8) {
-                SceneBadge(text: scene.hasGT ? "GT saved" : "No GT", systemImage: scene.hasGT ? "checkmark.seal" : "tag")
-                let mapStatus = mapBadgeStatus(for: scene)
-                SceneBadge(text: mapStatus.text, systemImage: mapStatus.systemImage)
-                SceneBadge(text: scene.hasColoredMeshPreview ? "RGB 3D" : (scene.hasMeshPreview ? "3D ready" : "3D pending"), systemImage: "cube.transparent")
-                let uploadStatus = uploadBadgeStatus(for: scene)
-                SceneBadge(text: uploadStatus.text, systemImage: uploadStatus.systemImage)
-                if let frameCount = scene.frameCount {
-                    SceneBadge(text: "\(frameCount) frames", systemImage: "film.stack")
-                }
-            }
+            sceneBadges(for: scene)
         }
         .padding(.vertical, 4)
         .swipeActions(edge: .trailing) {
@@ -215,7 +219,26 @@ struct SceneGalleryView: View {
             } label: {
                 Label("Annotate", systemImage: "map")
             }
-            .tint(.blue)
+            .tint(SidarTheme.jadeAccent)
+        }
+    }
+
+    private func sceneBadges(for scene: SceneRecord) -> some View {
+        let mapStatus = mapBadgeStatus(for: scene)
+        let uploadStatus = uploadBadgeStatus(for: scene)
+
+        return LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 128), spacing: 8, alignment: .leading)],
+            alignment: .leading,
+            spacing: 8
+        ) {
+            SceneBadge(text: scene.hasGT ? "GT saved" : "No GT", systemImage: scene.hasGT ? "checkmark.seal" : "tag")
+            SceneBadge(text: mapStatus.text, systemImage: mapStatus.systemImage)
+            SceneBadge(text: scene.hasColoredMeshPreview ? "RGB 3D" : (scene.hasMeshPreview ? "3D ready" : "3D pending"), systemImage: "cube.transparent")
+            SceneBadge(text: uploadStatus.text, systemImage: uploadStatus.systemImage)
+            if let frameCount = scene.frameCount {
+                SceneBadge(text: "\(frameCount) frames", systemImage: "film.stack")
+            }
         }
     }
 
@@ -499,10 +522,11 @@ struct RoomLabelEditorView: View {
                     ForEach(labels, id: \.self) { label in
                         HStack {
                             Text(label.roomLabelDisplayName)
+                                .foregroundStyle(SidarTheme.jadeInk)
                             Spacer()
                             Text(label)
                                 .font(SidarFont.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(SidarTheme.jadeMuted)
                         }
                     }
                     .onDelete(perform: deleteLabels)
@@ -534,6 +558,8 @@ struct RoomLabelEditorView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(SidarTheme.jadeBackground)
             .navigationTitle("Room Types")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -552,6 +578,8 @@ struct RoomLabelEditorView: View {
             }
         }
         .font(SidarFont.body)
+        .background(SidarTheme.jadeBackground.ignoresSafeArea())
+        .tint(SidarTheme.jadeAccent)
         .presentationDetents([.medium, .large])
     }
 
@@ -710,6 +738,8 @@ private struct SceneUploadSettingsView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(SidarTheme.jadeBackground)
             .navigationTitle("Upload Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -729,6 +759,8 @@ private struct SceneUploadSettingsView: View {
             }
         }
         .font(SidarFont.body)
+        .background(SidarTheme.jadeBackground.ignoresSafeArea())
+        .tint(SidarTheme.jadeAccent)
         .presentationDetents([.medium, .large])
     }
 
@@ -1159,12 +1191,26 @@ private struct SceneBadge: View {
     let systemImage: String
 
     var body: some View {
-        Label(text, systemImage: systemImage)
-            .font(SidarFont.medium(11, relativeTo: .caption2))
-            .padding(.horizontal, 7)
-            .padding(.vertical, 4)
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(SidarTheme.jadeAccent)
+                .frame(width: 15)
+
+            Text(text)
+                .font(SidarFont.medium(12, relativeTo: .caption))
+                .foregroundStyle(SidarTheme.jadeInk)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+        .background(SidarTheme.jadeSurfaceQuiet, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(SidarTheme.jadeLine.opacity(0.42), lineWidth: 1)
+        }
+        .accessibilityLabel(text)
     }
 }
 

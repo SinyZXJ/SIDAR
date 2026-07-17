@@ -1,4 +1,5 @@
 import ARKit
+import CoreMotion
 import SceneKit
 import SwiftUI
 
@@ -39,18 +40,46 @@ struct ContentView: View {
             }
         }
         .font(SidarFont.body)
+        .onAppear(perform: applyContentOrientation)
+        .onChange(of: hasEnteredCapture) { _, _ in
+            applyContentOrientation()
+        }
         .sheet(isPresented: $showingInstructions) {
             SidarInstructionsView()
+                .onAppear {
+                    SidarOrientationLock.set(.portrait)
+                }
+                .onDisappear {
+                    applyContentOrientation()
+                }
         }
         .sheet(isPresented: $showingGallery) {
             SceneGalleryView()
                 .environmentObject(recorder)
+                .onAppear {
+                    SidarOrientationLock.set(.portrait)
+                }
+                .onDisappear {
+                    applyContentOrientation()
+                }
         }
         .sheet(isPresented: $showingRoomTypes) {
             RoomLabelEditorView()
+                .onAppear {
+                    SidarOrientationLock.set(.portrait)
+                }
+                .onDisappear {
+                    applyContentOrientation()
+                }
         }
         .fullScreenCover(item: $annotationTarget) { target in
             RoomAnnotationView(sceneURL: target.url)
+                .onAppear {
+                    SidarOrientationLock.set(.landscape)
+                }
+                .onDisappear {
+                    applyContentOrientation()
+                }
         }
         .alert("Annotation Map Failed", isPresented: annotationFailureBinding) {
             Button("OK", role: .cancel) {}
@@ -65,6 +94,10 @@ struct ContentView: View {
             }
             lastAnnouncedAnnotationError = message
         }
+    }
+
+    private func applyContentOrientation() {
+        SidarOrientationLock.set(hasEnteredCapture ? .landscape : .portrait)
     }
 
     private var captureView: some View {
@@ -405,91 +438,70 @@ struct SidarIntroView: View {
     let onInstructions: () -> Void
     let onGallery: () -> Void
     let onRoomTypes: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @StateObject private var reflection = SidarJadeReflectionModel()
 
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.02, green: 0.025, blue: 0.035),
-                    Color(red: 0.0, green: 0.0, blue: 0.0)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+        GeometryReader { proxy in
+            let safeTop = proxy.safeAreaInsets.top
+            let safeBottom = proxy.safeAreaInsets.bottom
 
-            SidarParticleField()
-                .ignoresSafeArea()
+            ZStack {
+                SidarJadeBackground(
+                    reflectionOffset: reduceMotion ? .zero : reflection.offset,
+                    reflectionAngle: reduceMotion ? 0 : reflection.angle
+                )
 
-            VStack(spacing: 18) {
-                Spacer()
+                VStack(spacing: 0) {
+                    Spacer(minLength: max(24, safeTop + 12))
 
-                VStack(spacing: 10) {
-                    Text("SIDAR")
-                        .font(SidarFont.heavy(72, relativeTo: .largeTitle))
-                        .tracking(1.2)
-                        .foregroundStyle(.white)
+                    VStack(spacing: 8) {
+                        VStack(spacing: 8) {
+                            Text("SIDAR")
+                                .font(.system(size: 54, weight: .bold))
+                                .tracking(0.8)
+                                .foregroundStyle(SidarIntroPalette.ink)
 
-                    Text("Spatial Indoor-outdoor Data Acquisition and Reconstruction")
-                        .font(SidarFont.medium(20, relativeTo: .title3))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.white.opacity(0.72))
+                            Text("Capture LiDAR scenes for reconstruction and room annotation.")
+                                .font(SidarFont.medium(16, relativeTo: .body))
+                                .multilineTextAlignment(.center)
+                                .foregroundStyle(SidarIntroPalette.muted)
+                                .lineLimit(3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
+                    Spacer(minLength: 32)
+
+                    VStack(spacing: 10) {
+                        SidarPrimaryCaptureButton(action: onStart)
+
+                        VStack(spacing: 8) {
+                            SidarIntroToolButton(title: "Instructions", systemImage: "book", action: onInstructions)
+                            SidarIntroToolButton(title: "Gallery", systemImage: "rectangle.stack", action: onGallery)
+                            SidarIntroToolButton(title: "Room Types", systemImage: "tag", action: onRoomTypes)
+                        }
+                    }
+
+                    Spacer(minLength: max(24, safeBottom + 18))
                 }
-
-                HStack(spacing: 14) {
-                    Button {
-                        onStart()
-                    } label: {
-                        Label("Enter Capture", systemImage: "arrow.forward.circle.fill")
-                            .frame(width: 210)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-
-                    Button {
-                        onInstructions()
-                    } label: {
-                        Label("Instructions", systemImage: "book")
-                            .frame(width: 190)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .tint(.white)
-                }
-                .padding(.top, 8)
-
-                HStack(spacing: 12) {
-                    Button {
-                        onGallery()
-                    } label: {
-                        Label("Gallery", systemImage: "rectangle.stack")
-                            .frame(width: 158)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.regular)
-                    .tint(.white)
-
-                    Button {
-                        onRoomTypes()
-                    } label: {
-                        Label("Room Types", systemImage: "tag")
-                            .frame(width: 158)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.regular)
-                    .tint(.white)
-                }
-
-                Spacer()
-
-                LabLogoView()
-                    .frame(maxWidth: 520, maxHeight: 152)
-                    .foregroundStyle(.white.opacity(0.86))
-                    .shadow(color: .cyan.opacity(0.22), radius: 18)
-                    .shadow(color: .white.opacity(0.18), radius: 2)
-                    .padding(.bottom, 12)
+                .frame(maxWidth: 430)
+                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(.horizontal, 28)
+        }
+        .onAppear {
+            if reduceMotion {
+                reflection.stop()
+            } else {
+                reflection.start()
+            }
+        }
+        .onDisappear {
+            reflection.stop()
+        }
+        .onChange(of: reduceMotion) { _, isReduced in
+            isReduced ? reflection.stop() : reflection.start()
         }
     }
 }
@@ -505,7 +517,7 @@ struct LabLogoView: View {
             } else {
                 Text("Perceptica Robotics")
                     .font(SidarFont.heavy(20, relativeTo: .title3))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
             }
         }
     }
@@ -521,53 +533,236 @@ struct LabLogoView: View {
     }
 }
 
-struct SidarParticleField: View {
-    var body: some View {
-        TimelineView(.animation) { timeline in
-            Canvas { context, size in
-                let time = timeline.date.timeIntervalSinceReferenceDate
-                let count = 120
-                for index in 0..<count {
-                    let seed = Double(index)
-                    let xBase = fractional(sin(seed * 12.9898) * 43758.5453)
-                    let yBase = fractional(sin(seed * 78.233) * 19341.123)
-                    let drift = sin(time * 0.25 + seed * 0.37) * 22.0
-                    let pulse = 0.45 + 0.55 * sin(time * 0.9 + seed)
-                    let x = xBase * size.width + drift
-                    let y = yBase * size.height + cos(time * 0.18 + seed) * 16.0
-                    let radius = 1.2 + CGFloat(pulse) * 2.2
-                    let alpha = 0.12 + 0.35 * pulse
-                    let rect = CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 2)
-                    let color = index % 3 == 0 ? Color.cyan : Color.white
-                    context.fill(Path(ellipseIn: rect), with: .color(color.opacity(alpha)))
-                }
+private final class SidarJadeReflectionModel: ObservableObject {
+    @Published var offset: CGSize = .zero
+    @Published var angle: Double = 24
 
-                for index in stride(from: 0, to: count - 8, by: 8) {
-                    let a = particlePoint(index, time: time, size: size)
-                    let b = particlePoint(index + 5, time: time, size: size)
-                    let distance = hypot(a.x - b.x, a.y - b.y)
-                    guard distance < 180 else { continue }
-                    var path = Path()
-                    path.move(to: a)
-                    path.addLine(to: b)
-                    context.stroke(path, with: .color(.cyan.opacity(0.10)), lineWidth: 1)
-                }
-            }
+    private let motionManager = CMMotionManager()
+    private var isRunning = false
+
+    func start() {
+        guard !isRunning, motionManager.isDeviceMotionAvailable else { return }
+        isRunning = true
+        motionManager.deviceMotionUpdateInterval = 1.0 / 30.0
+        motionManager.startDeviceMotionUpdates(to: .main) { [weak self] motion, _ in
+            guard let self, let motion else { return }
+            let roll = motion.attitude.roll
+            let pitch = motion.attitude.pitch
+            let target = CGSize(
+                width: clamp(CGFloat(roll) * 96, min: -82, max: 82),
+                height: clamp(CGFloat(-pitch) * 74, min: -64, max: 64)
+            )
+            offset = CGSize(
+                width: offset.width * 0.80 + target.width * 0.20,
+                height: offset.height * 0.80 + target.height * 0.20
+            )
+            angle = 24 + clamp(roll * 12, min: -10, max: 10)
         }
     }
 
-    private func particlePoint(_ index: Int, time: TimeInterval, size: CGSize) -> CGPoint {
-        let seed = Double(index)
-        let xBase = fractional(sin(seed * 12.9898) * 43758.5453)
-        let yBase = fractional(sin(seed * 78.233) * 19341.123)
-        return CGPoint(
-            x: xBase * size.width + sin(time * 0.25 + seed * 0.37) * 22.0,
-            y: yBase * size.height + cos(time * 0.18 + seed) * 16.0
-        )
+    func stop() {
+        motionManager.stopDeviceMotionUpdates()
+        isRunning = false
+        offset = .zero
+        angle = 24
     }
 
-    private func fractional(_ value: Double) -> Double {
-        value - floor(value)
+    private func clamp<T: Comparable>(_ value: T, min lower: T, max upper: T) -> T {
+        Swift.min(Swift.max(value, lower), upper)
+    }
+}
+
+private enum SidarIntroPalette {
+    static let background = SidarTheme.jadeBackground
+    static let surface = SidarTheme.jadeSurface
+    static let ink = SidarTheme.jadeInk
+    static let muted = SidarTheme.jadeMuted
+    static let line = SidarTheme.jadeLine
+    static let primary = SidarTheme.jadeAccent
+}
+
+private struct SidarJadeBackground: View {
+    let reflectionOffset: CGSize
+    let reflectionAngle: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            let side = max(proxy.size.width, proxy.size.height)
+
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        SidarTheme.jadeSurface,
+                        SidarTheme.jadeBackground,
+                        SidarTheme.jadeSurfaceQuiet,
+                        SidarTheme.jadeBackgroundDeep
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                SidarJadeVeins()
+                    .opacity(0.88)
+
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                .white.opacity(0.66),
+                                SidarTheme.jadeSurface.opacity(0.30),
+                                .clear
+                            ],
+                            center: .center,
+                            startRadius: 8,
+                            endRadius: side * 0.48
+                        )
+                    )
+                    .frame(width: side * 0.92, height: side * 0.92)
+                    .offset(x: -side * 0.24 + reflectionOffset.width, y: -side * 0.32 + reflectionOffset.height)
+                    .blur(radius: 3)
+
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                SidarTheme.jadeAccent.opacity(0.12),
+                                SidarTheme.jadeLine.opacity(0.10),
+                                .clear
+                            ],
+                            center: .center,
+                            startRadius: 12,
+                            endRadius: side * 0.42
+                        )
+                    )
+                    .frame(width: side * 0.72, height: side * 0.72)
+                    .offset(x: side * 0.30 - reflectionOffset.width * 0.45, y: side * 0.24 - reflectionOffset.height * 0.35)
+                    .blur(radius: 8)
+
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                .clear,
+                                .white.opacity(0.54),
+                                .white.opacity(0.20),
+                                .clear
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: max(118, proxy.size.width * 0.30), height: proxy.size.height * 1.7)
+                    .rotationEffect(.degrees(reflectionAngle))
+                    .offset(x: reflectionOffset.width * 1.9 + proxy.size.width * 0.15, y: reflectionOffset.height * 0.95)
+                    .blendMode(.screen)
+                    .opacity(0.90)
+
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                .clear,
+                                .white.opacity(0.30),
+                                .clear
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: max(28, proxy.size.width * 0.08), height: proxy.size.height * 1.5)
+                    .rotationEffect(.degrees(reflectionAngle + 4))
+                    .offset(x: reflectionOffset.width * 2.2 - proxy.size.width * 0.18, y: reflectionOffset.height * 0.7)
+                    .blendMode(.screen)
+                    .opacity(0.72)
+            }
+            .ignoresSafeArea()
+        }
+    }
+}
+
+private struct SidarJadeVeins: View {
+    var body: some View {
+        Canvas { context, size in
+            let veins: [(CGFloat, CGFloat, CGFloat, CGFloat, CGFloat, Color)] = [
+                (0.04, 0.22, 0.46, 0.14, 0.86, SidarTheme.jadeAccent.opacity(0.15)),
+                (0.10, 0.76, 0.40, 0.84, 0.92, SidarTheme.jadeLine.opacity(0.22)),
+                (0.00, 0.48, 0.30, 0.38, 0.82, SidarTheme.jadeAccent.opacity(0.12)),
+                (0.28, 0.08, 0.58, 0.20, 1.04, SidarTheme.jadeLine.opacity(0.18)),
+                (-0.08, 0.62, 0.24, 0.56, 0.66, SidarTheme.jadeMuted.opacity(0.10)),
+                (0.22, 0.36, 0.52, 0.44, 1.10, SidarTheme.jadeAccent.opacity(0.09))
+            ]
+
+            for vein in veins {
+                var path = Path()
+                let start = CGPoint(x: size.width * vein.0, y: size.height * vein.1)
+                let c1 = CGPoint(x: size.width * vein.2, y: size.height * (vein.1 - 0.10))
+                let c2 = CGPoint(x: size.width * vein.3, y: size.height * (vein.1 + 0.16))
+                let end = CGPoint(x: size.width * vein.4, y: size.height * (vein.1 + 0.06))
+                path.move(to: start)
+                path.addCurve(to: end, control1: c1, control2: c2)
+                context.stroke(path, with: .color(vein.5), style: StrokeStyle(lineWidth: 1.55, lineCap: .round))
+            }
+        }
+        .blur(radius: 0.25)
+    }
+}
+
+private struct SidarPrimaryCaptureButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.forward.circle.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                Text("Enter Capture")
+                    .font(.system(size: 18, weight: .semibold))
+                Spacer()
+                Image(systemName: "camera.viewfinder")
+                    .font(.system(size: 18, weight: .semibold))
+                    .opacity(0.82)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 18)
+            .frame(height: 56)
+            .frame(maxWidth: .infinity)
+            .background(.black, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(alignment: .top) {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(.white.opacity(0.18), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct SidarIntroToolButton: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 18, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.80)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(SidarIntroPalette.ink)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(SidarIntroPalette.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(SidarIntroPalette.line, lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -606,6 +801,7 @@ struct SidarInstructionsView: View {
             }
             .tabViewStyle(.page)
             .indexViewStyle(.page(backgroundDisplayMode: .always))
+            .background(SidarTheme.jadeBackground)
             .navigationTitle("SIDAR Instructions")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -617,6 +813,8 @@ struct SidarInstructionsView: View {
             }
         }
         .font(SidarFont.body)
+        .background(SidarTheme.jadeBackground.ignoresSafeArea())
+        .tint(SidarTheme.jadeAccent)
         .presentationDetents([.large])
     }
 }
@@ -639,15 +837,16 @@ struct InstructionCard<Accessory: View>: View {
             VStack(spacing: 18) {
                 Image(systemName: icon)
                     .font(SidarFont.heavy(44, relativeTo: .largeTitle))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(SidarTheme.jadeAccent)
                 Text(title)
                     .font(SidarFont.heavy(22, relativeTo: .title2))
+                    .foregroundStyle(SidarTheme.jadeInk)
                     .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(text)
                     .font(SidarFont.regular(17))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(SidarTheme.jadeMuted)
                     .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: 520)
@@ -656,6 +855,7 @@ struct InstructionCard<Accessory: View>: View {
             .frame(maxWidth: .infinity)
             .padding(32)
         }
+        .background(SidarTheme.jadeBackground)
     }
 }
 
