@@ -16,6 +16,8 @@ class PhoneFrame:
     rgb: Path
     depth: Path
     confidence: Path | None
+    smoothed_depth: Path | None
+    smoothed_confidence: Path | None
     image_width: int
     image_height: int
     depth_width: int
@@ -32,6 +34,7 @@ class PhoneScene:
     metadata: dict[str, Any]
     frames: list[PhoneFrame]
     mesh_path: Path | None
+    mesh_anchor_metadata_path: Path | None
 
 
 @dataclass(frozen=True)

@@ -1,5 +1,5 @@
-"""Phone LiDAR capture to Isaac Sim and MP3D-compatible ROS2 bags."""
+"""SIDAR PhoneScene capture validation and simulator reconstruction tools."""
 
 __all__ = ["__version__"]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "phone-scene-to-isaac"
-version = "0.1.0"
-description = "iPhone LiDAR to Isaac Sim reconstruction and MP3D-compatible ROS2 bag generation."
+version = "0.2.0"
+description = "SIDAR iPhone LiDAR capture, validation, and simulator reconstruction tooling."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "ruff"]
 
 [project.scripts]
 phone-scene = "phone_scene_to_isaac.cli:main"

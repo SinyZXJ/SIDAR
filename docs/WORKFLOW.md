@@ -6,15 +6,23 @@
 2. Install to iPhone 15 Pro.
 3. Start AR session and wait for tracking state `normal`.
 4. Press Record.
-5. Walk every room deliberately. Enter each room and rotate in place.
-6. Stop recording and wait until mesh export finishes.
-7. Optionally tap **Review / Annotate Rooms**. The app opens a top-down
+5. Walk every room deliberately. Enter each room and rotate in place. Keep the
+   live **Turn slower** warning clear.
+6. Whenever a sign is visible, tap **Mark Sign**. Use **Typed Mark** when its
+   directional/locational/directory role is already unambiguous. Each mark is
+   attached to the latest accepted RGB-D frame, timestamp, pose, and tracking
+   state; it is not a free-floating wall-clock note.
+7. Stop recording and keep SIDAR open until finalization finishes. A valid
+   capture is atomically renamed from `.phonescene.partial` to `.phonescene`.
+   If any accepted write, bookmark, event, or expected mesh fails, SIDAR keeps
+   the partial directory for diagnosis and does not publish a finished capture.
+8. Optionally tap **Review / Annotate Rooms**. The app opens a top-down
    projection built from recorded mesh/depth/trajectory only. Draw one polygon
    per room, choose labels, and save GT. For stairs or multi-level scenes,
    switch the floor selector before drawing rooms on a different level; the app
    infers floor z bands from the recorded camera trajectory and lets you adjust
    each floor's `min_z` / `max_z` before saving.
-8. Copy the `.phonescene` directory from the app Documents folder.
+9. Copy or upload the `.phonescene` directory from the app Documents folder.
 
 Recommended capture style:
 
@@ -23,6 +31,8 @@ Recommended capture style:
 - Maintain 60% or more visual overlap between nearby viewpoints.
 - Revisit doorways and room boundaries.
 - Avoid fast yaw motion and long blank-wall-only segments.
+- Capture both sides of doorways and approach signs closely enough for readable
+  text; the button preserves the observation but cannot invent missing pixels.
 
 Phone-side annotation writes:
 
@@ -69,11 +79,16 @@ phone-scene validate data/scenes/office_001.phonescene
 
 The validator checks:
 
-- RGB/depth/confidence file existence.
-- Depth dimensions and finite metric depth ratio.
-- Intrinsics shape.
-- Pose continuity.
-- Tracking-state summary.
+- capture provenance, atomic-completion ledger, and exact frame/bookmark counts;
+- raw and smoothed RGB-D stream existence, dimensions, and unreferenced files;
+- metric-depth validity and ARKit confidence ranges;
+- intrinsics, pose transforms, timestamp ordering, and trajectory continuity;
+- mesh body, normals, face classifications, and anchor-range provenance;
+- exact sign-to-frame/timestamp/pose binding and session lifecycle events.
+
+Treat validation errors as hard blockers. Warnings identify usable but degraded
+coverage (for example low depth validity, poor tracking, or excessive rotation)
+and should be recorded in experiment metadata rather than ignored.
 
 ## 3. Build USD Scene
 
@@ -116,7 +131,14 @@ depth/
 pose/
 ```
 
-## 5. Write MP3D-Compatible Bag
+This command re-renders a prescribed camera trajectory for reproducible sensor
+data. It is not required for interactive navigation. For live planner/executor
+experiments, import the reconstructed USD as persistent scene geometry, generate
+collision and navigation data in the downstream ALIGN pipeline, spawn a robot,
+and drive it with the simulator's live control loop. The recorded phone path is
+then only reconstruction evidence, not the robot's allowed trajectory.
+
+## 5. Optionally Write an MP3D-Compatible Bag
 
 ```bash
 phone-scene render-to-bag outputs/office_001/renders outputs/office_001/rosbag2
@@ -128,4 +150,6 @@ Replay:
 ros2 bag play outputs/office_001/rosbag2 --clock
 ```
 
-Then run the existing VRS-Hydra MP3D-style launch files with the generated bag.
+Use this only for compatibility/regression baselines. The interactive
+Habitat/Isaac + ROOMS experiment should consume live simulator observations and
+poses instead of replaying this bag.

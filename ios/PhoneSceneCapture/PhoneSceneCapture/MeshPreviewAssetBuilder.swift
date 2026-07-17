@@ -354,8 +354,8 @@ struct MeshPreviewAssetBuilder {
                   count >= 3 else {
                 continue
             }
-            let faceIndices = parts.dropFirst().compactMap { Int($0) }
-            guard faceIndices.count >= 3 else { continue }
+            let faceIndices = parts.dropFirst().prefix(count).compactMap { Int($0) }
+            guard faceIndices.count == count else { continue }
             let first = faceIndices[0]
             for offset in 1..<(faceIndices.count - 1) {
                 if previewIndices.count / 3 >= maxPreviewTriangles {

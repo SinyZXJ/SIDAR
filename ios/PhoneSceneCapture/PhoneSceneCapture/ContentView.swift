@@ -128,7 +128,7 @@ struct ContentView: View {
         HStack(spacing: 10) {
             CaptureTopBarIconButton(
                 systemImage: "chevron.left",
-                disabled: recorder.isRecording
+                disabled: recorder.isRecording || recorder.isFinalizing
             ) {
                 recorder.pauseSession()
                 withAnimation(.easeInOut(duration: 0.35)) {
@@ -169,6 +169,22 @@ struct ContentView: View {
                     Text("\(recorder.throttledFrameCount) throttled")
                         .font(SidarFont.footnote)
                         .foregroundStyle(.yellow)
+                }
+            }
+
+            if recorder.signBookmarkCount > 0 {
+                CaptureTopBarChip {
+                    Label("\(recorder.signBookmarkCount) signs", systemImage: "signpost.right.fill")
+                        .font(SidarFont.footnote)
+                        .foregroundStyle(.cyan)
+                }
+            }
+
+            if recorder.motionWarning {
+                CaptureTopBarChip {
+                    Label("Turn slower", systemImage: "speedometer")
+                        .font(SidarFont.footnote)
+                        .foregroundStyle(.orange)
                 }
             }
 
@@ -220,6 +236,13 @@ struct ContentView: View {
                 title: "Capture Saved",
                 message: "The annotation map did not finish. Open Gallery and try Annotate again.",
                 tint: .orange
+            )
+        } else if recorder.trackingSummary.hasPrefix("save failed") {
+            CaptureStatusBanner(
+                icon: "xmark.octagon.fill",
+                title: "Capture Incomplete",
+                message: "Integrity checks failed. The partial package was preserved and will not appear as a finished PhoneScene.",
+                tint: .red
             )
         }
     }
@@ -282,6 +305,33 @@ struct ContentView: View {
                 }
             }
 
+            if recorder.isRecording {
+                HStack(spacing: 12) {
+                    Button {
+                        _ = recorder.markSign(.unreviewed)
+                    } label: {
+                        Label("Mark Sign", systemImage: "signpost.right.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.cyan)
+                    .disabled(!recorder.canMarkSign)
+
+                    Menu {
+                        ForEach(SignBookmarkCueType.allCases.filter { $0 != .unreviewed }) { cueType in
+                            Button(cueType.displayName) {
+                                _ = recorder.markSign(cueType)
+                            }
+                        }
+                    } label: {
+                        Label("Typed Mark", systemImage: "tag.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!recorder.canMarkSign)
+                }
+            }
+
             HStack(spacing: 12) {
                 Button {
                     recorder.resetSession()
@@ -290,19 +340,22 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
-                .disabled(recorder.isRecording)
+                .disabled(recorder.isRecording || recorder.isFinalizing)
 
                 Button {
                     recorder.isRecording ? recorder.stopRecording() : recorder.startRecording()
                 } label: {
                     Label(
-                        recorder.isRecording ? "Stop" : "Record",
-                        systemImage: recorder.isRecording ? "stop.fill" : "record.circle"
+                        recorder.isFinalizing ? "Finalizing" : (recorder.isRecording ? "Stop" : "Record"),
+                        systemImage: recorder.isFinalizing
+                            ? "hourglass"
+                            : (recorder.isRecording ? "stop.fill" : "record.circle")
                     )
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(recorder.isRecording ? .red : .blue)
+                .disabled(recorder.isFinalizing)
             }
         }
     }
@@ -319,7 +372,7 @@ struct ContentView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 360)
-                .disabled(recorder.isRecording)
+                .disabled(recorder.isRecording || recorder.isFinalizing)
             }
 
             HStack(spacing: 12) {

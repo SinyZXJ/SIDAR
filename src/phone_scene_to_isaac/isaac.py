@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-
-import numpy as np
 
 from .coordinates import arkit_cam_to_world_to_ros_optical, scale_intrinsics
 from .io import load_phone_scene, write_json

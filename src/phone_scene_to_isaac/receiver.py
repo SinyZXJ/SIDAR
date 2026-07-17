@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import shutil
+import threading
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,9 @@ class UploadSession:
     total_bytes: int
     received_files: int = 0
     received_bytes: int = 0
+    received_paths: set[str] = field(default_factory=set)
+    lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    closed: bool = False
 
 
 class UploadRegistry:
@@ -36,59 +40,96 @@ class UploadRegistry:
         self.overwrite = overwrite
         self.staging_dir = self.output_dir / ".sidar_uploads"
         self.sessions: dict[str, UploadSession] = {}
+        self.lock = threading.RLock()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.staging_dir.mkdir(parents=True, exist_ok=True)
 
     def start(self, scene_name: str, file_count: int, total_bytes: int) -> UploadSession:
         scene_name = sanitize_scene_name(scene_name)
+        file_count = int(file_count)
+        total_bytes = int(total_bytes)
+        if file_count <= 0:
+            raise ReceiverError("file_count must be positive")
+        if total_bytes <= 0:
+            raise ReceiverError("total_bytes must be positive")
         upload_id = uuid.uuid4().hex
         root = self.staging_dir / upload_id / scene_name
-        root.mkdir(parents=True, exist_ok=False)
-        session = UploadSession(
-            upload_id=upload_id,
-            scene_name=scene_name,
-            root=root,
-            file_count=max(0, int(file_count)),
-            total_bytes=max(0, int(total_bytes)),
-        )
-        self.sessions[upload_id] = session
+        with self.lock:
+            root.mkdir(parents=True, exist_ok=False)
+            session = UploadSession(
+                upload_id=upload_id,
+                scene_name=scene_name,
+                root=root,
+                file_count=file_count,
+                total_bytes=total_bytes,
+            )
+            self.sessions[upload_id] = session
         return session
 
     def write_file(self, upload_id: str, relative_path: str, source, length: int) -> UploadSession:
         session = self._session(upload_id)
         safe_path = safe_relative_path(relative_path)
-        target = session.root / safe_path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        remaining = max(0, int(length))
-        with target.open("wb") as stream:
-            while remaining > 0:
-                chunk = source.read(min(1024 * 1024, remaining))
-                if not chunk:
-                    raise ReceiverError(f"incomplete upload for {relative_path}")
-                stream.write(chunk)
-                remaining -= len(chunk)
-        session.received_files += 1
-        session.received_bytes += max(0, int(length))
+        canonical_path = safe_path.as_posix()
+        length = int(length)
+        if length < 0:
+            raise ReceiverError("upload length cannot be negative")
+        with session.lock:
+            if session.closed:
+                raise ReceiverError("upload session is already finalizing")
+            if canonical_path in session.received_paths:
+                raise ReceiverError(f"duplicate upload path: {relative_path}")
+            if session.received_files >= session.file_count:
+                raise ReceiverError("upload exceeds declared file_count")
+            if session.received_bytes + length > session.total_bytes:
+                raise ReceiverError("upload exceeds declared total_bytes")
+            target = session.root / safe_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            remaining = length
+            with target.open("wb") as stream:
+                while remaining > 0:
+                    chunk = source.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        raise ReceiverError(f"incomplete upload for {relative_path}")
+                    stream.write(chunk)
+                    remaining -= len(chunk)
+            session.received_files += 1
+            session.received_bytes += length
+            session.received_paths.add(canonical_path)
         return session
 
     def finish(self, upload_id: str) -> dict[str, Any]:
         session = self._session(upload_id)
-        target = self.output_dir / session.scene_name
-        if target.exists():
-            if self.overwrite:
-                shutil.rmtree(target)
-            else:
-                target = unique_scene_path(target)
+        with session.lock:
+            if session.closed:
+                raise ReceiverError("upload session is already finalizing")
+            if session.file_count != session.received_files:
+                raise ReceiverError(
+                    f"upload file count mismatch: declared {session.file_count}, "
+                    f"received {session.received_files}"
+                )
+            if session.total_bytes != session.received_bytes:
+                raise ReceiverError(
+                    f"upload byte count mismatch: declared {session.total_bytes}, "
+                    f"received {session.received_bytes}"
+                )
+            session.closed = True
 
-        validation_report: dict[str, Any] | None = None
-        if self.validate:
-            validation_report = validate_phone_scene(session.root)
+            validation_report: dict[str, Any] | None = None
+            if self.validate:
+                validation_report = validate_phone_scene(session.root)
 
-        shutil.move(str(session.root), str(target))
-        parent = session.root.parent
-        if parent.exists():
-            shutil.rmtree(parent, ignore_errors=True)
-        self.sessions.pop(upload_id, None)
+            with self.lock:
+                target = self.output_dir / session.scene_name
+                if target.exists():
+                    if self.overwrite:
+                        shutil.rmtree(target)
+                    else:
+                        target = unique_scene_path(target)
+                shutil.move(str(session.root), str(target))
+                parent = session.root.parent
+                if parent.exists():
+                    shutil.rmtree(parent, ignore_errors=True)
+                self.sessions.pop(upload_id, None)
 
         return {
             "status": "ok",
@@ -100,18 +141,23 @@ class UploadRegistry:
         }
 
     def cancel(self, upload_id: str) -> None:
-        session = self.sessions.pop(upload_id, None)
+        with self.lock:
+            session = self.sessions.get(upload_id)
         if session is None:
             return
-        parent = session.root.parent
-        if parent.exists():
-            shutil.rmtree(parent, ignore_errors=True)
+        with session.lock:
+            with self.lock:
+                self.sessions.pop(upload_id, None)
+                parent = session.root.parent
+                if parent.exists():
+                    shutil.rmtree(parent, ignore_errors=True)
 
     def _session(self, upload_id: str) -> UploadSession:
-        try:
-            return self.sessions[upload_id]
-        except KeyError as exc:
-            raise ReceiverError(f"unknown upload_id: {upload_id}") from exc
+        with self.lock:
+            try:
+                return self.sessions[upload_id]
+            except KeyError as exc:
+                raise ReceiverError(f"unknown upload_id: {upload_id}") from exc
 
 
 def sanitize_scene_name(scene_name: str) -> str:
@@ -188,7 +234,7 @@ def serve_receiver(
 
 
 class SidarUploadHandler(BaseHTTPRequestHandler):
-    server_version = "SIDARReceiver/0.1"
+    server_version = "SIDARReceiver/0.2"
     upload_registry: UploadRegistry
     upload_token: str | None
 

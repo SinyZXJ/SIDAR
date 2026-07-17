@@ -732,8 +732,8 @@ struct TopDownMapBuilder {
                   count >= 3 else {
                 continue
             }
-            let indices = parts.dropFirst().compactMap { Int($0) }
-            guard indices.count >= 3 else { continue }
+            let indices = parts.dropFirst().prefix(count).compactMap { Int($0) }
+            guard indices.count == count else { continue }
             let first = indices[0]
             for triangleIndex in 1..<(indices.count - 1) {
                 let second = indices[triangleIndex]

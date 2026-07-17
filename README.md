@@ -1,20 +1,42 @@
-# PhoneSceneToIsaac
+# SIDAR
 
-PhoneSceneToIsaac is a standalone pipeline for turning an iPhone 15 Pro LiDAR scan
-into an Isaac Sim scene and then rendering an MP3D-compatible ROS2 bag for
-VRS-Hydra room-segmentation experiments.
+SIDAR records metric, provenance-preserving iPhone LiDAR scenes and converts them
+into reconstruction inputs for Habitat/Isaac navigation experiments. PhoneScene
+v2 treats raw ARKit depth, RGB, the calibrated camera trajectory, mesh semantics,
+and operator sign observations as an immutable source dataset.
 
 The pipeline is intentionally metric-first:
 
-1. Record RGB, LiDAR depth, ARKit camera poses, intrinsics, timestamps, and an
-   optional ARKit mesh on iPhone.
-2. Optionally annotate GT room polygons on-device from a top-down projection.
-3. Validate the exported `.phonescene` package on Linux.
-4. Build a colorized metric mesh and export it as USD/USDA.
-5. Render RGB-D and camera poses in Isaac Sim.
-6. Write a ROS2 bag that matches the existing MP3D workflow topics.
+1. Record RGB, raw LiDAR depth, optional smoothed depth, ARKit camera poses,
+   intrinsics, timestamps, mesh normals/classifications, and anchor provenance.
+2. Mark observed signs with a button bound to the exact source frame and pose.
+3. Optionally annotate GT room polygons on-device from a top-down projection.
+4. Validate every stream and the capture-completion ledger on Linux.
+5. Build a colorized metric mesh and export it as USD/USDA.
+6. Use that geometry to build collision/navigation assets downstream, or
+   optionally re-render trajectories and write a ROS2 compatibility bag.
 
-## Output ROS2 Topic Contract
+The `.phonescene` package is not a rosbag and does not constrain an agent to the
+recorded phone path. Its geometry can be loaded as a persistent simulator stage;
+after downstream collision and navmesh generation, a robot can move under a live
+planner/executor while ROOMS maps and segments regions online. The current
+`make-isaac-script` command is a deterministic trajectory-rendering utility, not
+the interactive navigation layer itself.
+
+## PhoneScene v2 integrity guarantees
+
+- Captures are written to `.phonescene.partial` and become visible as
+  `.phonescene` only after all queued writes and final checks succeed.
+- `depth/` is always raw `ARFrame.sceneDepth`; temporal smoothing is kept in a
+  separate optional stream and is never silently substituted.
+- Any dropped/failed frame write, failed bookmark/event write, count mismatch,
+  missing expected mesh, or non-contiguous frame ID prevents finalization.
+- ARKit mesh normals, per-face classifications, and per-anchor transforms/ranges
+  are preserved.
+- `phone-scene validate` rejects incomplete, path-traversing, or internally
+  inconsistent packages before reconstruction or upload acceptance.
+
+## Optional ROS2 compatibility contract
 
 Generated bags use these topics:
 
@@ -47,16 +69,15 @@ This repository contains:
 - `scripts`: shell entrypoints for the common workflow.
 - `configs`: default capture and rendering settings.
 
-The current Linux workstation can validate Python tooling and write ROS2 bags.
-It does not have Xcode or Isaac Sim installed, so iPhone build and Isaac rendering
-must be run on machines with those tools.
+Linux can validate and convert captures. Xcode is required to build the iOS app;
+Isaac Sim is required for Isaac rendering or downstream simulator asset work.
 
 ## Quick Start
 
 Install Python tooling:
 
 ```bash
-cd /home/siny/Repos/PhoneSceneToIsaac
+cd /home/siny/Repos/SIDAR
 python3 -m pip install -e .
 ```
 
@@ -113,8 +134,13 @@ phone-scene render-to-bag \
 ## iPhone Recording App
 
 Open `ios/PhoneSceneCapture/PhoneSceneCapture.xcodeproj` on macOS with Xcode.
-Build to an iPhone 15 Pro. The installed app is displayed as **SIDAR** and writes `.phonescene` directories into the app
-Documents folder. After stopping a recording, tap **Review / Annotate Rooms** to
+Build to a LiDAR-capable iPhone. The installed app is displayed as **SIDAR**.
+During recording, use **Mark Sign** for a fast unreviewed observation or
+**Typed Mark** for directional, locational, or directory signs. After stopping,
+wait for finalization; an integrity failure remains a recoverable
+`.phonescene.partial` directory and is never presented as complete. SIDAR writes
+finished `.phonescene` directories into the app Documents folder. Then tap
+**Review / Annotate Rooms** to
 draw evaluator-compatible room GT on the phone. The app writes optional
 `annotation/topdown_map.png`, `annotation/annotation_payload.json`, and
 `annotation/gt_rooms.json` files inside the `.phonescene` directory. Retrieve

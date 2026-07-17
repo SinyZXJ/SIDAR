@@ -12,6 +12,20 @@ from PIL import Image
 from .types import PhoneFrame, PhoneScene, RenderFrame
 
 
+def _resolve_scene_path(root: Path, value: str, *, field: str) -> Path:
+    relative = Path(value)
+    if relative.is_absolute() or not relative.parts or any(
+        part in {"", ".", ".."} for part in relative.parts
+    ):
+        raise ValueError(f"Unsafe {field} path in PhoneScene manifest: {value!r}")
+    resolved = (root / relative).resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"{field} path escapes PhoneScene root: {value!r}") from exc
+    return resolved
+
+
 def _read_jsonl(path: Path) -> Iterable[dict]:
     with path.open("r", encoding="utf-8") as stream:
         for line_no, line in enumerate(stream, start=1):
@@ -38,16 +52,38 @@ def load_phone_scene(root: Path | str) -> PhoneScene:
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     frames: list[PhoneFrame] = []
     for entry in _read_jsonl(manifest_path):
-        rgb = root / entry["rgb"]
-        depth = root / entry["depth"]
+        rgb = _resolve_scene_path(root, str(entry["rgb"]), field="rgb")
+        depth = _resolve_scene_path(root, str(entry["depth"]), field="depth")
         confidence_value = entry.get("confidence")
-        confidence = root / confidence_value if confidence_value else None
+        confidence = (
+            _resolve_scene_path(root, str(confidence_value), field="confidence")
+            if confidence_value
+            else None
+        )
+        smoothed_depth_value = entry.get("smoothed_depth")
+        smoothed_confidence_value = entry.get("smoothed_confidence")
+        smoothed_depth = (
+            _resolve_scene_path(root, str(smoothed_depth_value), field="smoothed_depth")
+            if smoothed_depth_value
+            else None
+        )
+        smoothed_confidence = (
+            _resolve_scene_path(
+                root,
+                str(smoothed_confidence_value),
+                field="smoothed_confidence",
+            )
+            if smoothed_confidence_value
+            else None
+        )
         frame = PhoneFrame(
             frame_id=int(entry["frame_id"]),
             timestamp=float(entry["timestamp"]),
             rgb=rgb,
             depth=depth,
             confidence=confidence,
+            smoothed_depth=smoothed_depth,
+            smoothed_confidence=smoothed_confidence,
             image_width=int(entry["image_width"]),
             image_height=int(entry["image_height"]),
             depth_width=int(entry["depth_width"]),
@@ -60,7 +96,16 @@ def load_phone_scene(root: Path | str) -> PhoneScene:
         frames.append(frame)
 
     mesh_path = root / "mesh" / "arkit_mesh_world.ply"
-    return PhoneScene(root=root, metadata=metadata, frames=frames, mesh_path=mesh_path if mesh_path.exists() else None)
+    mesh_anchor_metadata_path = root / "mesh" / "arkit_mesh_anchors.json"
+    return PhoneScene(
+        root=root,
+        metadata=metadata,
+        frames=frames,
+        mesh_path=mesh_path if mesh_path.exists() else None,
+        mesh_anchor_metadata_path=(
+            mesh_anchor_metadata_path if mesh_anchor_metadata_path.exists() else None
+        ),
+    )
 
 
 def read_rgb(path: Path) -> np.ndarray:

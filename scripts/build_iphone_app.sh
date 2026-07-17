@@ -96,6 +96,7 @@ mkdir -p "$OUTPUT_DIR"
 BUILD_SETTINGS=(
   "CODE_SIGN_STYLE=Automatic"
   "PRODUCT_BUNDLE_IDENTIFIER=$BUNDLE_ID"
+  "SIDAR_GIT_COMMIT=$(git -C "$ROOT_DIR" rev-parse --short=12 HEAD)"
 )
 
 if [[ -n "$TEAM_ID" ]]; then

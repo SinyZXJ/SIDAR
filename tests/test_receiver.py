@@ -60,6 +60,32 @@ def test_upload_registry_writes_and_finishes_scene(tmp_path: Path) -> None:
     assert result["validation"]["status"] in {"ok", "warning"}
 
 
+def test_upload_registry_rejects_duplicate_paths(tmp_path: Path) -> None:
+    registry = UploadRegistry(tmp_path / "received")
+    session = registry.start("scene.phonescene", 2, 2)
+    registry.write_file(session.upload_id, "metadata.json", BytesIO(b"a"), 1)
+
+    with pytest.raises(ReceiverError, match="duplicate upload path"):
+        registry.write_file(session.upload_id, "metadata.json", BytesIO(b"b"), 1)
+
+
+def test_upload_registry_rejects_incomplete_declared_upload(tmp_path: Path) -> None:
+    registry = UploadRegistry(tmp_path / "received")
+    session = registry.start("scene.phonescene", 2, 2)
+    registry.write_file(session.upload_id, "metadata.json", BytesIO(b"a"), 1)
+
+    with pytest.raises(ReceiverError, match="file count mismatch"):
+        registry.finish(session.upload_id)
+
+
+def test_upload_registry_enforces_declared_byte_budget(tmp_path: Path) -> None:
+    registry = UploadRegistry(tmp_path / "received")
+    session = registry.start("scene.phonescene", 1, 1)
+
+    with pytest.raises(ReceiverError, match="declared total_bytes"):
+        registry.write_file(session.upload_id, "metadata.json", BytesIO(b"ab"), 2)
+
+
 class ReceiverTestServer:
     def __init__(self, output_dir: Path, *, token: str | None = "secret-token") -> None:
         registry = UploadRegistry(output_dir, validate=False)
